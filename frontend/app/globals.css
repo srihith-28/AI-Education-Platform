@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f3f7fb;
+  --fg: #152232;
+  --card: rgba(255, 255, 255, 0.6);
+  --line: rgba(21, 34, 50, 0.14);
+  --accent: #0ea5a3;
+  --accent-2: #f97316;
+}
+
+.dark {
+  --bg: #0b1522;
+  --fg: #e8f0ff;
+  --card: rgba(11, 21, 34, 0.62);
+  --line: rgba(232, 240, 255, 0.18);
+  --accent: #2dd4bf;
+  --accent-2: #fb923c;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-manrope), sans-serif;
+  color: var(--fg);
+  background:
+    radial-gradient(1200px circle at 10% 10%, rgba(14, 165, 163, 0.15), transparent 48%),
+    radial-gradient(900px circle at 92% 20%, rgba(249, 115, 22, 0.16), transparent 42%),
+    linear-gradient(120deg, #f3f7fb 0%, #edf3fb 50%, #f9f3eb 100%);
+}
+
+.dark body {
+  background:
+    radial-gradient(1000px circle at 8% 12%, rgba(45, 212, 191, 0.14), transparent 45%),
+    radial-gradient(900px circle at 92% 14%, rgba(251, 146, 60, 0.16), transparent 40%),
+    linear-gradient(160deg, #0b1522 0%, #111d2d 55%, #182535 100%);
+}
+
+.glass {
+  background: var(--card);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(14px);
+}
+
+.text-gradient {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}

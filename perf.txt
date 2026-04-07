@@ -1,0 +1,1 @@
+First normal form means each attribute contains atomic values only.
