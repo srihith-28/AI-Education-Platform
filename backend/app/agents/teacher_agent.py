@@ -111,6 +111,39 @@ def _postprocess_output(text: str, query: str) -> str:
     return cleaned
 
 
+def _grounded_title_answer_from_context(query: str, rag_context: str) -> str | None:
+    q = (query or "").strip().lower()
+    match = re.search(r"who\s+is\s+(?:the\s+)?(?:current\s+)?(cm|chief\s+minister)\s+of\s+([a-z\s]+)", q)
+    if not match:
+        return None
+
+    place = re.sub(r"\s+", " ", match.group(2)).strip(" ?.,")
+    if not place or not (rag_context or "").strip():
+        return None
+
+    pattern = re.compile(
+        rf"(?:chief\s+minister|cm)\s+of\s+{re.escape(place)}\s*(?:is|:|-)?\s*([A-Za-z][A-Za-z\s\.-]{{2,80}})",
+        re.IGNORECASE,
+    )
+    found = pattern.search(rag_context)
+    if not found:
+        return None
+
+    name = re.sub(r"\s+", " ", found.group(1)).strip(" .,-")
+    if not name:
+        return None
+
+    return (
+        "**Analysis**\n"
+        "I found a direct match in the retrieved curriculum context.\n\n"
+        "**Answer**\n"
+        f"The Chief Minister of {place.title()} is **{name}**.\n\n"
+        "**Summary**\n"
+        "- Returned a context-grounded factual answer.\n"
+        "- Prioritized uploaded-material evidence over generic model memory."
+    )
+
+
 def _ensure_ollama_ready() -> None:
     global _OLLAMA_READY_UNTIL
     if time.time() < _OLLAMA_READY_UNTIL:
@@ -185,6 +218,10 @@ def teacher_chatbot_response(query: str, memory_text: str = "", rag_context: str
     if _is_small_talk(query):
         return _small_talk_response(query)
 
+    grounded_fact = _grounded_title_answer_from_context(query, rag_context)
+    if grounded_fact:
+        return grounded_fact
+
     mode_hint = (chat_mode or "quality").strip().lower()
     
     # Count context sections for quality metric
@@ -208,14 +245,10 @@ def teacher_chatbot_response(query: str, memory_text: str = "", rag_context: str
         "You are an expert teacher copilot chatbot.\n\n"
         
         "Your responsibilities:\n"
-        "- Provide practical, concise teaching advice and help\n"
-        "- Use curriculum/uploaded-file context when relevant\n"
-        "- Answer ANY user question, even if unrelated to uploaded materials\n"
-        "- Assume 'our prime minister' or 'our president' refers to India by default\n"
-        "- If the user changes topics, adapt immediately\n"
-        "- NEVER refuse or say a question is out-of-scope\n"
-        "- Do NOT mention uploaded files, RAG, memory, or internal systems\n"
-        "- If context is irrelevant to the question, ignore it and use general knowledge\n\n"
+        "- Provide practical, concise teaching help grounded in available context when present\n"
+        "- If context is limited, still answer clearly using your general knowledge\n"
+        "- Prefer course context over general knowledge when both are available\n"
+        "- Do NOT mention uploaded files, RAG, memory, or internal systems\n\n"
         
         f"{PROMPT_FOR_AI_AGENTS}\n\n"
         

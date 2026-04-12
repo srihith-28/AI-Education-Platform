@@ -14,7 +14,7 @@ type ChatWindowProps = {
 
 export function ChatWindow({ messages }: ChatWindowProps) {
   return (
-    <div className="glass h-[420px] overflow-y-auto rounded-2xl p-4">
+    <div className="glass h-[420px] overflow-y-auto rounded-2xl p-4 shadow-glass">
       <div className="space-y-3">
         {messages.map((message, index) => (
           <motion.div
@@ -24,8 +24,8 @@ export function ChatWindow({ messages }: ChatWindowProps) {
             transition={{ duration: 0.24, delay: index * 0.03 }}
             className={`max-w-[80%] rounded-2xl px-4 py-2 ${
               message.role === "user"
-                ? "ml-auto bg-teal-500/20"
-                : "mr-auto border border-white/20 bg-white/20 dark:bg-slate-900/40"
+                ? "ml-auto bg-teal-500/20 text-slate-900 dark:text-slate-50"
+                : "mr-auto border border-slate-200/80 bg-white/70 text-slate-900 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-100"
             }`}
           >
             {message.text}

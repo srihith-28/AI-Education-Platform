@@ -115,3 +115,27 @@ Open frontend: `http://localhost:3000`
 - Local file storage is used at `backend/storage/materials`
 - Chroma persists in `backend/storage/chroma`
 - No Docker is required
+
+## Public Repository Safety
+
+Before pushing this project to a public GitHub repository:
+
+1. Do not commit secrets.
+  - Keep runtime secrets only in `backend/.env` and `frontend/.env.local`.
+  - Use `backend/.env.example` and `frontend/.env.example` as templates.
+2. Ensure local runtime artifacts are not tracked.
+  - Python virtualenvs (for example `backend/.venv/`)
+  - `frontend/node_modules/`, `frontend/.next/`
+  - `backend/storage/` and local DB files
+3. Rotate any previously exposed credentials before production use.
+  - Database password
+  - JWT/app secret keys
+4. Verify your git index before first push:
+
+```powershell
+git status
+git ls-files backend/.venv
+git ls-files backend/.env
+```
+
+The last two commands should return no files.

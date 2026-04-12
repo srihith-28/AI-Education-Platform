@@ -199,6 +199,34 @@ def _is_complex_query(query: str) -> bool:
     return any(marker in q for marker in complex_markers)
 
 
+def _wants_long_answer(query: str) -> bool:
+    q = (query or "").lower()
+    if len(q) >= 140:
+        return True
+    long_markers = (
+        "prepare", "generate", "create", "write", "draft", "mcq", "quiz", "question bank",
+        "detailed", "in depth", "comprehensive", "elaborate", "full", "complete", "long answer",
+        "lesson plan", "notes", "explain", "step-by-step", "steps", "examples",
+    )
+    return any(marker in q for marker in long_markers)
+
+
+def _adapt_length_budget(base_num_predict: int, base_num_ctx: int, query: str, context_quality: int) -> tuple[int, int]:
+    num_predict = base_num_predict
+    num_ctx = base_num_ctx
+
+    if _wants_long_answer(query):
+        num_predict = max(num_predict, 850 if context_quality >= 1 else 720)
+        num_ctx = max(num_ctx, 4096)
+    elif _is_complex_query(query):
+        num_predict = max(num_predict, 520)
+        num_ctx = max(num_ctx, 3072)
+    elif _is_simple_fact_query(query):
+        num_predict = min(num_predict, 220)
+
+    return num_predict, num_ctx
+
+
 def _is_simple_fact_query(query: str) -> bool:
     q = (query or "").strip().lower()
     if len(q) > 90:
@@ -228,24 +256,64 @@ def select_orchestration_profile(query: str, mode_hint: str = "auto", has_contex
             "reason": reason,
         }
 
+    def _configured_profile(primary_model: str, temperature: float, num_predict: int, num_ctx: int, reason: str) -> dict:
+        ordered_pool = _order_pool(pool, strategy="balanced")
+        primary = (primary_model or settings.ollama_chat_model or settings.ollama_fast_chat_model).strip()
+        primary_key = _normalize_name(primary)
+        fallbacks = [model for model in ordered_pool if _normalize_name(model) != primary_key]
+        if not fallbacks:
+            fallbacks = [settings.ollama_chat_model]
+        return {
+            "model": primary,
+            "fallback_models": fallbacks,
+            "temperature": temperature,
+            "num_predict": num_predict,
+            "num_ctx": num_ctx,
+            "reason": reason,
+        }
+
     if mode == "fast":
-        return _profile("fast", 0.2, 200, 1536, "explicit fast mode")
+        profile = _configured_profile(settings.ollama_fast_chat_model, 0.15, 220, 1536, "explicit fast mode")
+        profile["num_predict"], profile["num_ctx"] = _adapt_length_budget(
+            profile["num_predict"], profile["num_ctx"], query, context_quality
+        )
+        return profile
 
     if mode == "quality":
-        return _profile("quality", 0.2, 340, 3072, "explicit quality mode")
+        profile = _configured_profile(settings.ollama_quality_chat_model, 0.2, 520, 4096, "explicit quality mode")
+        profile["num_predict"], profile["num_ctx"] = _adapt_length_budget(
+            profile["num_predict"], profile["num_ctx"], query, context_quality
+        )
+        return profile
 
     # Auto mode: route based on query complexity, context availability, and quality
     if _is_simple_fact_query(query) and not has_context and context_quality == 0:
-        return _profile("fast", 0.15, 170, 1536, "auto simple fact query")
+        profile = _profile("fast", 0.15, 170, 1536, "auto simple fact query")
+        profile["num_predict"], profile["num_ctx"] = _adapt_length_budget(
+            profile["num_predict"], profile["num_ctx"], query, context_quality
+        )
+        return profile
 
     # If substantial context available, use quality model for better context synthesis
     if context_quality >= 2:
-        return _profile("quality", 0.2, 360, 3072, "auto quality model (good context)")
+        profile = _profile("quality", 0.2, 520, 4096, "auto quality model (good context)")
+        profile["num_predict"], profile["num_ctx"] = _adapt_length_budget(
+            profile["num_predict"], profile["num_ctx"], query, context_quality
+        )
+        return profile
 
     if _is_complex_query(query) or (has_context and context_quality >= 1):
-        return _profile("quality", 0.2, 360, 3072, "auto complex/context-rich query")
+        profile = _profile("quality", 0.2, 520, 4096, "auto complex/context-rich query")
+        profile["num_predict"], profile["num_ctx"] = _adapt_length_budget(
+            profile["num_predict"], profile["num_ctx"], query, context_quality
+        )
+        return profile
 
-    return _profile("balanced", 0.2, 240, 2048, "auto balanced query")
+    profile = _profile("balanced", 0.2, 320, 3072, "auto balanced query")
+    profile["num_predict"], profile["num_ctx"] = _adapt_length_budget(
+        profile["num_predict"], profile["num_ctx"], query, context_quality
+    )
+    return profile
 
 
 def invoke_with_fallback(prompt: str, profile: dict) -> tuple[str, str]:

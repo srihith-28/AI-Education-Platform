@@ -3,19 +3,25 @@
 @tailwind utilities;
 
 :root {
-  --bg: #f3f7fb;
-  --fg: #152232;
-  --card: rgba(255, 255, 255, 0.6);
-  --line: rgba(21, 34, 50, 0.14);
+  --bg: #eef4fb;
+  --fg: #142131;
+  --card: rgba(255, 255, 255, 0.78);
+  --line: rgba(21, 34, 50, 0.16);
+  --surface: #ffffff;
+  --surface-soft: #f7fafc;
+  --muted: #5d7188;
   --accent: #0ea5a3;
   --accent-2: #f97316;
 }
 
 .dark {
-  --bg: #0b1522;
-  --fg: #e8f0ff;
-  --card: rgba(11, 21, 34, 0.62);
-  --line: rgba(232, 240, 255, 0.18);
+  --bg: #091220;
+  --fg: #edf4ff;
+  --card: rgba(13, 25, 41, 0.76);
+  --line: rgba(232, 240, 255, 0.2);
+  --surface: #0f1d31;
+  --surface-soft: #13233a;
+  --muted: #9cb2ca;
   --accent: #2dd4bf;
   --accent-2: #fb923c;
 }
@@ -29,22 +35,24 @@ body {
   font-family: var(--font-manrope), sans-serif;
   color: var(--fg);
   background:
-    radial-gradient(1200px circle at 10% 10%, rgba(14, 165, 163, 0.15), transparent 48%),
-    radial-gradient(900px circle at 92% 20%, rgba(249, 115, 22, 0.16), transparent 42%),
-    linear-gradient(120deg, #f3f7fb 0%, #edf3fb 50%, #f9f3eb 100%);
+    radial-gradient(1200px circle at 8% 10%, rgba(14, 165, 163, 0.16), transparent 48%),
+    radial-gradient(950px circle at 95% 16%, rgba(249, 115, 22, 0.14), transparent 42%),
+    linear-gradient(120deg, #eef4fb 0%, #e7effa 52%, #f8f2e7 100%);
+  text-rendering: optimizeLegibility;
 }
 
 .dark body {
   background:
-    radial-gradient(1000px circle at 8% 12%, rgba(45, 212, 191, 0.14), transparent 45%),
-    radial-gradient(900px circle at 92% 14%, rgba(251, 146, 60, 0.16), transparent 40%),
-    linear-gradient(160deg, #0b1522 0%, #111d2d 55%, #182535 100%);
+    radial-gradient(1000px circle at 8% 12%, rgba(45, 212, 191, 0.15), transparent 45%),
+    radial-gradient(900px circle at 92% 14%, rgba(251, 146, 60, 0.17), transparent 40%),
+    linear-gradient(160deg, #091220 0%, #101d2f 55%, #16283c 100%);
 }
 
 .glass {
   background: var(--card);
   border: 1px solid var(--line);
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 10px 28px rgba(15, 27, 45, 0.14);
 }
 
 .text-gradient {
@@ -52,4 +60,57 @@ body {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+@layer base {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    color: #1e293b;
+    background-color: rgba(255, 255, 255, 0.92);
+    border-color: rgba(100, 116, 139, 0.34);
+  }
+
+  .dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  .dark select,
+  .dark textarea {
+    color: #e5edf7;
+    background-color: rgba(15, 29, 49, 0.9);
+    border-color: rgba(148, 163, 184, 0.35);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #7d8ea3;
+    opacity: 1;
+  }
+
+  .dark input::placeholder,
+  .dark textarea::placeholder {
+    color: #90a4be;
+  }
+
+  select option {
+    color: #0f172a;
+    background: #ffffff;
+  }
+
+  .dark select option {
+    color: #f1f5f9;
+    background: #0f1d31;
+  }
+
+  input:disabled,
+  select:disabled,
+  textarea:disabled,
+  button:disabled {
+    opacity: 0.72;
+    cursor: not-allowed;
+  }
+}
+
+@layer utilities {
+  .shadow-glass {
+    box-shadow: 0 14px 30px rgba(15, 27, 45, 0.16);
+  }
 }

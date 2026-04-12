@@ -6,9 +6,13 @@ from starlette.requests import Request
 
 from app.agents.router import router as agents_router
 from app.auth.router import router as auth_router
+from app.calendar.router import router as calendar_router
+from app.classwork.router import router as classwork_router
 from app.common.config import settings
 from app.common.schemas import HealthResponse
 from app.database.init_db import init_db
+from app.grades.router import router as grades_router
+from app.people.router import router as people_router
 from app.student.router import router as student_router
 from app.teacher.router import router as teacher_router
 from app.users.router import router as users_router
@@ -32,6 +36,10 @@ app.include_router(users_router, prefix="/api/v1/users", tags=["users"])
 app.include_router(teacher_router, prefix="/api/v1/teacher", tags=["teacher"])
 app.include_router(student_router, prefix="/api/v1/student", tags=["student"])
 app.include_router(agents_router, prefix="/api/v1/agents", tags=["agents"])
+app.include_router(calendar_router, prefix="/api/v1/calendar", tags=["calendar"])
+app.include_router(classwork_router, prefix="/api/v1/classwork", tags=["classwork"])
+app.include_router(people_router, prefix="/api/v1", tags=["people"])
+app.include_router(grades_router, prefix="/api/v1/grades", tags=["grades"])
 
 
 @app.on_event("startup")

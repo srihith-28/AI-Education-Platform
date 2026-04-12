@@ -4,12 +4,25 @@ __pycache__/
 *.pyd
 .pytest_cache/
 .mypy_cache/
+.venv/
+venv/
+
+backend/.venv/
+backend/.venv-py314/
 
 backend/.env
 backend/storage/
+backend/*.sqlite3
 
 frontend/.next/
 frontend/node_modules/
 frontend/.env.local
+frontend/.data/
+
+*.log
+*.tmp
+*.bak
+*.swp
+.vscode/
 
 .DS_Store

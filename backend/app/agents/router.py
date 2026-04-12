@@ -8,7 +8,7 @@ from datetime import datetime
 
 from app.agents.teacher_agent import teacher_agent_response, teacher_chatbot_response
 from app.common.deps import get_current_user, require_role
-from app.database.models import ChatMessage, ChatSession, Course, Material, User
+from app.database.models import Announcement, ChatMessage, ChatSession, Course, Material, User
 from app.database.session import SessionLocal, get_db
 from app.rag.ingestion import extract_text
 from app.rag.query import teacher_rag_context
@@ -229,6 +229,35 @@ def _small_talk_response(query: str) -> str:
     return "Hello. How can I help you today?"
 
 
+def _extract_title_fact_from_text(query: str, text: str) -> str | None:
+    q = (query or "").strip().lower()
+    m = re.search(r"who\s+is\s+(?:the\s+)?(?:current\s+)?(cm|chief\s+minister)\s+of\s+([a-z\s]+)", q)
+    if not m:
+        return None
+    place = re.sub(r"\s+", " ", m.group(2)).strip(" ?.,")
+    if not place or not (text or "").strip():
+        return None
+    pattern = re.compile(
+        rf"(?:chief\s+minister|cm)\s+of\s+{re.escape(place)}\s*(?:is|:|-)?\s*([A-Za-z][A-Za-z\s\.-]{{2,80}})",
+        re.IGNORECASE,
+    )
+    hit = pattern.search(text)
+    if not hit:
+        return None
+    name = re.sub(r"\s+", " ", hit.group(1)).strip(" .,-")
+    if not name:
+        return None
+    return (
+        "**Analysis**\n"
+        "I found a direct factual match in the latest uploaded course material.\n\n"
+        "**Answer**\n"
+        f"The Chief Minister of {place.title()} is **{name}**.\n\n"
+        "**Summary**\n"
+        "- Returned a direct answer from the latest uploaded file.\n"
+        "- Prioritized uploaded context over general model memory."
+    )
+
+
 class TeacherAgentRequest(BaseModel):
     query: str = Field(min_length=3)
     course_code: str | None = None
@@ -342,6 +371,7 @@ def teacher_assistant_chat(
 
     course_ids: list[int] = []
     latest_material_ids: list[int] = []
+    normalized_course_code = (payload.course_code or "").strip().upper()
 
     # Query memory and teacher courses in a short-lived DB session to avoid holding DB connections during LLM generation.
     with SessionLocal() as db:
@@ -354,7 +384,6 @@ def teacher_assistant_chat(
         )
 
         course_query = db.query(Course.id).filter(Course.teacher_id == current_user.id)
-        normalized_course_code = (payload.course_code or "").strip().upper()
         if normalized_course_code:
             course_query = course_query.filter(Course.course_code == normalized_course_code)
         course_ids = [row.id for row in course_query.all()]
@@ -368,6 +397,36 @@ def teacher_assistant_chat(
             )
             if latest_material:
                 latest_material_ids.append(latest_material.id)
+
+        # Hard factual guard for selected course: check latest file text first.
+        if normalized_course_code and course_ids:
+            latest_file = (
+                db.query(Material.file_path)
+                .filter(Material.course_id == course_ids[0], Material.teacher_id == current_user.id)
+                .order_by(Material.uploaded_at.desc(), Material.id.desc())
+                .first()
+            )
+            if latest_file and latest_file[0]:
+                try:
+                    latest_text = extract_text(str(latest_file[0]))
+                    grounded = _extract_title_fact_from_text(query_text, latest_text[:25000])
+                    if grounded:
+                        db.add(ChatMessage(user_id=current_user.id, session_id=payload.session_id, role="user", content=query_text))
+                        db.add(ChatMessage(user_id=current_user.id, session_id=payload.session_id, role="assistant", content=grounded))
+                        db.commit()
+                        return {
+                            "success": True,
+                            "message": "Teacher assistant response generated",
+                            "data": {
+                                "answer": grounded,
+                                "session_id": payload.session_id,
+                                "chat_mode": payload.chat_mode,
+                                "sources": [{"course_id": course_ids[0]}],
+                                "context_chunks": 1,
+                            },
+                        }
+                except Exception:
+                    logger.exception("Teacher latest-file factual extraction failed for course %s", course_ids[0])
 
     # Build memory from most recent messages, trimming BEFORE joining
     memory_messages = list(reversed(history_rows))  # Chronological order
@@ -384,6 +443,44 @@ def teacher_assistant_chat(
             status_code=503,
             detail="Ollama is not reachable. Start Ollama and ensure required models are available.",
         ) from exc
+
+    # Fallback for previously uploaded announcement attachments that were not embedded.
+    if rag_data.get("context_chunks", 0) == 0 and normalized_course_code:
+        with SessionLocal() as db:
+            course = (
+                db.query(Course.id)
+                .filter(Course.teacher_id == current_user.id, Course.course_code == normalized_course_code)
+                .first()
+            )
+            if course:
+                attachment_rows = (
+                    db.query(Announcement.attachment_path, Announcement.attachment_name)
+                    .filter(Announcement.course_id == course.id, Announcement.attachment_path.isnot(None))
+                    .order_by(Announcement.created_at.desc())
+                    .limit(3)
+                    .all()
+                )
+
+                fallback_parts: list[str] = []
+                fallback_sources: list[dict] = []
+                for row in attachment_rows:
+                    attachment_path = row.attachment_path
+                    if not attachment_path:
+                        continue
+                    try:
+                        text = extract_text(attachment_path)
+                    except Exception:
+                        continue
+                    if text.strip():
+                        fallback_parts.append(text[:1200])
+                        fallback_sources.append({"attachment_name": row.attachment_name, "path": attachment_path})
+
+                if fallback_parts:
+                    rag_data = {
+                        "context": "\n\n".join(fallback_parts)[:3000],
+                        "sources": fallback_sources,
+                        "context_chunks": len(fallback_parts),
+                    }
 
     try:
         answer = teacher_chatbot_response(query_text, memory_text, rag_data.get("context", ""), payload.chat_mode)
