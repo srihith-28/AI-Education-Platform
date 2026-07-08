@@ -1,135 +1,74 @@
-# AI Education Platform — Migration Walkthrough
+# AI Education Platform - Complete Walkthrough & Deployment Guide
 
-## What Was Accomplished
+Welcome to the comprehensive walkthrough of the AI Education Platform. This document highlights the core features developed, the architectural decisions made, and a complete guide on how to deploy this stack to production.
 
-The AI Education Platform has been fully migrated from a local development stack to a production-ready cloud architecture across 8 phases.
+## 🌟 Feature Showcase
+
+### 1. Relative Grading System (Bell Curve)
+We built an advanced statistical grading engine for teachers. Instead of just static percentages, the platform:
+- Computes the **class mean** and **standard deviation** dynamically.
+- Assigns a **Z-Score** to each student.
+- Translates Z-scores into relative letter grades (A, A-, B, etc.) using a standard bell curve.
+- Includes absolute safeguards so high achievers (e.g., >=95%) are guaranteed an 'A' regardless of a skewed class average.
+
+### 2. Dynamic Leaderboards
+Gamification drives engagement. We implemented real-time leaderboards for both the teacher and student dashboards:
+- Students can see their ranking based on total percentage.
+- The relative letter grade (A-F) is prominently displayed with color-coded badges (Emerald, Blue, Amber, Rose).
+- Teachers can view class-wide performance at a glance.
+
+### 3. ChatGPT-Style AI Tutor & Teacher Agent
+- **Student Side:** A context-aware RAG (Retrieval-Augmented Generation) chat assistant. It strictly answers questions based on the course material uploaded by the teacher.
+- **Teacher Side:** An autonomous agent that helps generate quizzes, summarize materials, and orchestrate course structure.
+
+### 4. Interactive Class Calendar
+- Full calendar view to track assignments, lectures, and exams.
+- Built-in event management directly accessible from the dashboard.
+
+### 5. Production-Grade UI/UX
+- A completely responsive, frosted-glass (glassmorphism) interface.
+- Vibrant, dynamic gradients and accessible Dark/Light mode toggles.
+- Built heavily using Tailwind CSS and Framer Motion for micro-interactions.
 
 ---
 
-## Supabase Project
+## 🏗️ Architecture & Migration Summary
 
-- **Project Name**: `ai-education-platform`  
-- **Project ID**: `ueecrmnssoubvztdsapi`
-- **Region**: `ap-southeast-1` (Singapore)
-- **URL**: `https://ueecrmnssoubvztdsapi.supabase.co`
-- **Storage Bucket**: `course-materials` (private, signed URLs)
+To move this project from local development to a scalable production environment, several major migrations were completed:
 
----
-
-## Changes Summary
-
-### Backend
-
-| File | Change |
+| Component | Change |
 |---|---|
-| `app/common/config.py` | Replaced Ollama/Chroma settings with Supabase, Qdrant, Groq, OpenAI configs |
-| `app/common/security.py` | Replaced custom JWT create/verify with Supabase JWT verification only |
-| `app/common/deps.py` | Auto-provisions users in DB on first login via `supabase_uid` |
-| `app/common/storage.py` | **New** — Supabase Storage service abstraction |
-| `app/auth/service.py` | Replaced bcrypt/JWT auth with profile sync helper |
-| `app/auth/router.py` | New `/sync` and `/me` endpoints; removed `/login` and `/signup` |
-| `app/auth/schemas.py` | Updated schemas for Supabase auth flow |
-| `app/database/models.py` | Added `supabase_uid` column to User |
-| `app/database/session.py` | Added production pool settings |
-| `app/database/init_db.py` | Added `supabase_uid` migration |
-| `app/rag/embeddings.py` | Replaced ChromaDB + Ollama → Qdrant Cloud + OpenAI |
-| `app/rag/query.py` | Qdrant filter syntax; deprecated `get_relevant_documents` → `invoke` |
-| `app/agents/orchestration.py` | Replaced Ollama pool with Groq two-tier model selection |
-| `app/agents/teacher_agent.py` | Removed Ollama health check |
-| `app/agents/tools.py` | Replaced OllamaLLM with ChatGroq |
-| `app/main.py` | Production CORS, rate limiting, lifespan context manager |
-| `requirements.txt` | Complete dependency swap |
-| `Procfile` | **New** — Railway deployment |
-| `railway.toml` | **New** — Railway config with health check |
-| `.env` | Updated with all new service credentials (placeholders for secrets) |
-| `.env.production.example` | **New** — Production env template |
-
-### Frontend
-
-| File | Change |
-|---|---|
-| `lib/supabase.ts` | **New** — Supabase browser client singleton |
-| `lib/auth.ts` | Replaced localStorage/cookie auth with Supabase session |
-| `lib/api.ts` | Async token retrieval; `syncUser` replaces `signup`/`login` |
-| `middleware.ts` | Supabase SSR session verification replaces cookie check |
-| `app/(auth)/login/page.tsx` | Supabase `signInWithPassword` |
-| `app/(auth)/signup/page.tsx` | Supabase `signUp` + backend `syncUser` |
-| `package.json` | Added `@supabase/supabase-js`, `@supabase/ssr` |
-| `.env.local` | Supabase URL + anon key + backend URL |
-| `vercel.json` | **New** — Vercel deployment config with security headers |
+| **Database** | SQLite ➡️ Supabase PostgreSQL |
+| **Authentication** | Local JWTs ➡️ Supabase Auth (SSO / SSR ready) |
+| **Vector DB (RAG)** | Local ChromaDB ➡️ Qdrant Cloud |
+| **LLM Inference** | Local Ollama ➡️ Groq Cloud (Llama 3) |
+| **Embeddings** | Local Nomic ➡️ OpenAI Text Embeddings |
+| **Deployment** | Localhost ➡️ Vercel (Frontend) & Railway (Backend) |
 
 ---
 
-## Critical Steps Before Going Live
+## 🚀 Critical Steps Before Going Live
 
 > [!CAUTION]
-> These steps MUST be completed before the app will work end-to-end.
+> These steps MUST be completed before the app will work end-to-end in production.
 
-### 1. Get Supabase JWT Secret (REQUIRED for backend auth)
+### 1. Supabase Configuration (DB & Auth)
+1. Go to your Supabase Project Settings > API.
+2. Copy the **JWT Secret** and add it to `backend/.env` as `SUPABASE_JWT_SECRET`.
+3. Copy the **service_role** key and add it as `SUPABASE_SERVICE_ROLE_KEY`.
+4. Copy the **Database Connection String** (pooler URL) and add it as `DATABASE_URL_OVERRIDE`.
 
-1. Go to [https://supabase.com/dashboard/project/ueecrmnssoubvztdsapi/settings/api](https://supabase.com/dashboard/project/ueecrmnssoubvztdsapi/settings/api)
-2. Copy **JWT Secret** from the "Project API keys" section
-3. Add to `backend/.env`:
-   ```
-   SUPABASE_JWT_SECRET=<your-jwt-secret>
-   ```
+### 2. Qdrant Cloud Cluster (Vector Search)
+1. Create a free cluster at [cloud.qdrant.io](https://cloud.qdrant.io).
+2. Copy your Cluster URL and API Key into `backend/.env` as `QDRANT_URL` and `QDRANT_API_KEY`.
 
-### 2. Get Supabase Service Role Key (REQUIRED for storage)
-
-1. On the same API settings page
-2. Copy **service_role** key (keep this SECRET — never expose to frontend)
-3. Add to `backend/.env`:
-   ```
-   SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
-   ```
-
-### 3. Get Supabase DB Password + Connection String (REQUIRED for DB)
-
-1. Go to Supabase Dashboard → Project Settings → Database
-2. Copy the connection string (use the **pooler** URL for production)
-3. Add to `backend/.env`:
-   ```
-   DATABASE_URL_OVERRIDE=postgresql://postgres.ueecrmnssoubvztdsapi:[password]@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres
-   ```
-
-### 4. Disable Email Confirmation for Development (Optional)
-
-1. Supabase Dashboard → Authentication → Providers → Email
-2. Toggle off "Confirm email" for easier testing
-3. Re-enable in production
-
-### 5. Create Qdrant Cloud Cluster
-
-1. Go to [https://cloud.qdrant.io](https://cloud.qdrant.io)
-2. Create a free cluster
-3. Copy Cluster URL and API Key
-4. Add to `backend/.env`:
-   ```
-   QDRANT_URL=https://xxx.us-east4-0.gcp.cloud.qdrant.io
-   QDRANT_API_KEY=<key>
-   ```
-
-### 6. Get Groq API Key
-
-1. Go to [https://console.groq.com/keys](https://console.groq.com/keys)
-2. Create API key
-3. Add to `backend/.env`:
-   ```
-   GROQ_API_KEY=gsk_...
-   ```
-
-### 7. Get OpenAI API Key
-
-1. Go to [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys)
-2. Create API key
-3. Add to `backend/.env`:
-   ```
-   OPENAI_API_KEY=sk-...
-   ```
+### 3. API Keys (Groq & OpenAI)
+1. Get your Groq API key from [console.groq.com](https://console.groq.com) (`GROQ_API_KEY`).
+2. Get your OpenAI API key from [platform.openai.com](https://platform.openai.com) (`OPENAI_API_KEY`).
 
 ---
 
-## Running Locally (After Filling Credentials)
+## 💻 Running Locally (After Migration)
 
 ### Backend
 ```bash
@@ -137,8 +76,7 @@ cd backend
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
-
-Verify: `curl http://localhost:8000/health`
+Verify the backend is running at: `http://localhost:8000/health`
 
 ### Frontend
 ```bash
@@ -146,84 +84,25 @@ cd frontend
 npm install
 npm run dev
 ```
-
-Open: [http://localhost:3000](http://localhost:3000)
-
----
-
-## Auth Flow (New)
-
-```
-User fills signup form
-       ↓
-supabase.auth.signUp(email, password, { data: { name, role } })
-       ↓
-Supabase creates user with app_metadata.role
-       ↓
-Frontend calls POST /api/v1/auth/sync { name, role }
-       ↓
-Backend verifies Supabase JWT, upserts User in PostgreSQL
-       ↓
-User redirected to /dashboard/{role}
-```
-
-```
-User fills login form
-       ↓
-supabase.auth.signInWithPassword(email, password)
-       ↓
-Supabase returns session with access_token (JWT)
-       ↓
-Frontend stores session (auto-managed by Supabase SDK)
-       ↓
-All API calls use session.access_token as Bearer token
-       ↓
-FastAPI verifies Supabase JWT → gets supabase_uid → fetches User from DB
-```
+Open the platform at: `http://localhost:3000`
 
 ---
 
-## Deployment
+## 🌐 Production Deployment
 
-### Backend → Railway
+### Backend ➡️ Railway
+1. Push this repository to GitHub.
+2. Create a Railway project and deploy directly from GitHub.
+3. Set all environment variables from your `.env.production.example`.
+4. Railway will auto-detect the `Procfile` and start the FastAPI server.
 
-1. Push to GitHub
-2. Create Railway project → Deploy from GitHub
-3. Set all environment variables from `.env.production.example`
-4. Railway auto-detects `Procfile` and starts the server
-5. Health check: `https://your-app.railway.app/health`
-
-### Frontend → Vercel
-
-1. Push to GitHub
-2. Import project in Vercel
-3. Set environment variables:
+### Frontend ➡️ Vercel
+1. Import this repository into Vercel.
+2. Set the following environment variables:
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `NEXT_PUBLIC_API_BASE_URL` (Railway backend URL)
-4. Deploy
+   - `NEXT_PUBLIC_API_BASE_URL` (Point this to your Railway backend URL)
+3. Deploy!
 
 ---
-
-## Architecture After Migration
-
-```
-┌─────────────────┐     JWT (Supabase)     ┌──────────────────────┐
-│   Next.js       │ ◄──────────────────── │    Supabase Auth     │
-│   (Vercel)      │ ──────────────────────►│    (Email Auth)      │
-└────────┬────────┘                        └──────────────────────┘
-         │ Bearer token                              │
-         ▼                                    user metadata
-┌─────────────────┐                        ┌──────────────────────┐
-│   FastAPI       │ ◄──────────────────── │  Supabase PostgreSQL │
-│   (Railway)     │    SQLAlchemy ORM      │  (User, Course, etc) │
-└────────┬────────┘                        └──────────────────────┘
-         │                                          │
-    ┌────┴────┐                              ┌──────┴──────┐
-    │         │                              │             │
-    ▼         ▼                              ▼             ▼
-┌───────┐ ┌──────┐                    ┌──────────┐  ┌──────────┐
-│ Groq  │ │OpenAI│                    │  Qdrant  │  │ Supabase │
-│  LLM  │ │Embed │                    │  Cloud   │  │ Storage  │
-└───────┘ └──────┘                    └──────────┘  └──────────┘
-```
+*Built with ❤️ for modern education.*

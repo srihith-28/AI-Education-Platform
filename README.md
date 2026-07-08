@@ -1,141 +1,87 @@
-# AI Education Platform Monorepo
+# AI Education Platform 🚀
 
-Production-style full-stack AI education system with:
-- Next.js (App Router) + Tailwind + Framer Motion frontend
-- FastAPI modular backend
-- PostgreSQL for transactional data
-- ChromaDB for vector search
-- Ollama (`llama3.1`) + `nomic-embed-text`
-- LangChain for RAG and AI agents
+A modern, production-ready full-stack AI education system designed to bridge the gap between traditional learning and next-generation artificial intelligence. Built with a focus on stunning aesthetics, deep analytics, and seamless AI integration.
 
-## Structure
+## ✨ Key Features & Highlights
 
-```
-/backend
-/frontend
-```
+### 🎨 Stunning, Modern UX/UI
+- **Glassmorphism Design:** Beautiful, frosted-glass components with vibrant, dynamic gradients.
+- **Dark/Light Mode:** Seamless theme toggling for accessible and comfortable viewing at any hour.
+- **Responsive Animations:** Micro-interactions built with Framer Motion and Tailwind CSS.
 
-## Backend Features
+### 🧠 Advanced AI Capabilities
+- **ChatGPT-Style AI Tutor:** A dedicated AI chat window utilizing RAG (Retrieval-Augmented Generation) to answer student queries contextually based on uploaded course material.
+- **Teacher AI Agent:** An autonomous LangChain-powered agent to help teachers generate quizzes, grade assignments, and orchestrate course material.
+- **Local AI Models:** Powered by local Ollama (`llama3.1` and `nomic-embed-text`) ensuring privacy and zero token costs, integrated with ChromaDB for fast vector search.
 
-- Modular architecture:
-  - `auth/`, `users/`, `teacher/`, `student/`, `rag/`, `agents/`, `database/`
-- JWT auth with bcrypt password hashing
-- RBAC for teacher/student protected routes
-- Teacher workflows:
-  - course creation
-  - material upload endpoint (`/api/v1/teacher/upload-material`)
-  - auto-ingestion to Chroma
-  - AI quiz generation
-- Student workflows:
-  - RAG Q&A (`/api/v1/student/ask`)
-  - AI-evaluated quizzes
-  - progress tracking + leaderboard
-  - personalized learning path recommendations
-- Teacher AI Agent (LangChain Agent + tools)
-- Student AI assistant with conversation memory
-- Swagger docs at `/docs`
+### 📊 Advanced Grading & Analytics
+- **Spreadsheet-Style Grading Dashboard:** A highly interactive, real-time grading interface for teachers with auto-saving cells and CSV exports.
+- **Relative Z-Score Grading (Bell Curve):** An advanced statistical grading algorithm that automatically calculates class means, variances, and standard deviations to assign relative letter grades (A, A-, B, etc.). Includes absolute safeguards to ensure top performers are perfectly rewarded.
+- **Dynamic Leaderboards:** Real-time leaderboards for both teachers and students, displaying overall percentages and relative grades to encourage healthy gamification.
 
-## Frontend Features
+### 🔐 Enterprise-Grade Infrastructure
+- **Supabase Integration:** Secure, scalable PostgreSQL database and seamless Authentication management.
+- **Modular FastAPI Backend:** Clean, maintainable architecture separating authentication, users, RAG, agents, and database models.
+- **Next.js App Router:** Optimized, server-rendered frontend for lightning-fast performance and SEO.
 
-- Landing page
-- Login/Signup pages
-- Role-based dashboards (Teacher / Student)
-- Animated glassmorphism UI + dark/light mode
-- Teacher dashboard:
-  - course creation
-  - file upload with progress indicator
-  - teacher AI agent chat panel
-- Student dashboard:
-  - ChatGPT-style AI tutor
-  - leaderboard and progress cards
+---
 
-## Prerequisites
+## 🛠️ Tech Stack
 
-- Python 3.11 (recommended and tested)
+**Frontend:** Next.js (App Router), React, Tailwind CSS, Framer Motion, TypeScript, Lucide Icons  
+**Backend:** Python 3.11, FastAPI, SQLAlchemy, Supabase, PostgreSQL  
+**AI Layer:** LangChain, ChromaDB, Ollama, HuggingFace  
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
 - Node.js 20+
-- PostgreSQL running locally
-- Ollama running locally
+- Python 3.11
+- PostgreSQL (via Supabase)
+- Ollama (running locally)
 
-Pull models in Ollama:
-
-```powershell
+### 1. Setup Local AI Models
+```bash
 ollama pull llama3.1
 ollama pull nomic-embed-text
 ```
 
-## Backend Setup
-
-```powershell
+### 2. Backend Setup
+```bash
 cd backend
-py -3.11 -m venv .venv
+python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+
+# Configure your environment variables (.env) with your Supabase credentials
 copy .env.example .env
+
+# Run database migrations
 python -m app.database.init_db
+
+# Start the server
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-If you already created a virtual environment with Python 3.14 or newer, recreate it with Python 3.11 before installing dependencies.
-
-For fully reproducible installs, a locked dependency snapshot is available at `backend/requirements.lock.txt`.
-
-```powershell
-pip install -r requirements.lock.txt
-```
-
-## Frontend Setup
-
-```powershell
+### 3. Frontend Setup
+```bash
 cd frontend
 npm install
+
+# Configure your environment variables
 copy .env.example .env.local
+
+# Start the dev server
 npm run dev
 ```
 
-Open frontend: `http://localhost:3000`
+Open your browser to `http://localhost:3000` to view the platform!
 
-## Key API Endpoints
+---
 
-- `POST /api/v1/auth/signup`
-- `POST /api/v1/auth/login`
-- `GET /api/v1/users/me`
-- `POST /api/v1/teacher/courses`
-- `POST /api/v1/teacher/upload-material`
-- `POST /api/v1/teacher/generate-quiz`
-- `POST /api/v1/student/ask`
-- `POST /api/v1/student/quiz-attempt`
-- `POST /api/v1/student/progress`
-- `GET /api/v1/student/progress/summary`
-- `GET /api/v1/student/leaderboard`
-- `GET /api/v1/student/learning-path`
-- `POST /api/v1/agents/teacher-chat`
-
-## Notes
-
-- Local file storage is used at `backend/storage/materials`
-- Chroma persists in `backend/storage/chroma`
-- No Docker is required
-
-## Public Repository Safety
-
-Before pushing this project to a public GitHub repository:
-
-1. Do not commit secrets.
-  - Keep runtime secrets only in `backend/.env` and `frontend/.env.local`.
-  - Use `backend/.env.example` and `frontend/.env.example` as templates.
-2. Ensure local runtime artifacts are not tracked.
-  - Python virtualenvs (for example `backend/.venv/`)
-  - `frontend/node_modules/`, `frontend/.next/`
-  - `backend/storage/` and local DB files
-3. Rotate any previously exposed credentials before production use.
-  - Database password
-  - JWT/app secret keys
-4. Verify your git index before first push:
-
-```powershell
-git status
-git ls-files backend/.venv
-git ls-files backend/.env
-```
-
-The last two commands should return no files.
+## 🛡️ Security & Best Practices
+- **Never commit `.env.local` or `.env` files.**
+- Role-based access control (RBAC) ensures students cannot access teacher grading dashboards.
+- Database operations are securely handled via Supabase Row Level Security (RLS) and FastAPI dependencies.
