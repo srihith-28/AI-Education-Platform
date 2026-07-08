@@ -438,10 +438,10 @@ def teacher_assistant_chat(
     
     try:
         rag_data = teacher_rag_context(query_text, course_ids, latest_material_ids=latest_material_ids)
-    except ConnectionError as exc:
+    except Exception as exc:
         raise HTTPException(
             status_code=503,
-            detail="Ollama is not reachable. Start Ollama and ensure required models are available.",
+            detail=f"Gemini API error: {str(exc)}",
         ) from exc
 
     # Fallback for previously uploaded announcement attachments that were not embedded.

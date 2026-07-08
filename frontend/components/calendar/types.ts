@@ -9,4 +9,5 @@ export type CalendarEvent = {
   due_date: string;
   due_time: string | null;
   created_at: string;
+  status?: "turned_in" | "late" | "missing" | "assigned" | null;
 };

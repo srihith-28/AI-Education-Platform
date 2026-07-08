@@ -29,11 +29,18 @@ const formatTime = (value: string | null): string | null => {
 export function EventCard({ event, onClick }: EventCardProps) {
   const displayTime = formatTime(event.due_time);
 
+  let style = typeStyles[event.type];
+  if (event.status === "turned_in" || event.status === "late") {
+    style = "bg-green-600 text-white";
+  } else if (event.status === "missing") {
+    style = "bg-rose-600 text-white";
+  }
+
   return (
     <button
       type="button"
       onClick={() => onClick(event)}
-      className={`w-full rounded-md px-2 py-1 text-left text-xs transition hover:brightness-110 ${typeStyles[event.type]}`}
+      className={`w-full rounded-md px-2 py-1 text-left text-xs transition hover:brightness-110 ${style}`}
       title={event.title}
     >
       <p className="truncate font-semibold">{event.title}</p>

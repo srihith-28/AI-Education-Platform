@@ -1,20 +1,28 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr
 
 
-class SignupRequest(BaseModel):
-    name: str = Field(min_length=2, max_length=120)
-    email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
-    role: str
+class UserSyncRequest(BaseModel):
+    """Sent by frontend after Supabase signup to register the role in our DB."""
+    name: str
+    role: str  # "teacher" | "student"
 
 
-class LoginRequest(BaseModel):
+class RegisterRequest(BaseModel):
+    """Sent by frontend to bypass email confirmation during local development."""
     email: EmailStr
     password: str
-
-
-class AuthResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user_id: int
+    name: str
     role: str
+
+
+class UserProfileResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+    role: str
+    supabase_uid: str | None = None
+
+
+class MeResponse(BaseModel):
+    success: bool
+    data: UserProfileResponse

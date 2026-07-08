@@ -18,6 +18,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { ChatSessionMenu } from "@/components/chat-session-menu";
 import { api } from "@/lib/api";
 import { authStorage } from "@/lib/auth";
+import { SettingsPage } from "@/components/settings/SettingsPage";
 
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "/api/v1";
@@ -496,7 +497,7 @@ export default function StudentDashboardPage() {
     }
 
     try {
-      const token = authStorage.getToken();
+      const token = await authStorage.getToken();
       const resolvedUrl = downloadUrl.startsWith("http") ? downloadUrl : new URL(downloadUrl, window.location.origin).toString();
       const response = await fetch(resolvedUrl, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -576,7 +577,7 @@ export default function StudentDashboardPage() {
       setPostingAnnouncement(true);
       setClassroomMessage("");
 
-      const token = authStorage.getToken();
+      const token = await authStorage.getToken();
       const formData = new FormData();
       formData.append("message", cleanedMessage);
       if (selectedAnnouncementFile) {
@@ -654,8 +655,9 @@ export default function StudentDashboardPage() {
           setIsCourseActionsMenuOpen(false);
         }}
         onStudentLogout={() => {
-          authStorage.clearAuth();
-          window.location.href = "/login";
+          authStorage.signOut().then(() => {
+            window.location.href = "/login";
+          });
         }}
       />
 
@@ -1032,7 +1034,7 @@ export default function StudentDashboardPage() {
               <p className="mt-2 text-sm opacity-80">Enter your teacher's class code to join an enrolled class.</p>
               <div className="mt-4 flex flex-wrap items-center gap-3">
                 <input
-                  className="w-full max-w-sm rounded-xl border border-white/20 bg-white/30 px-4 py-3 uppercase"
+                  className="w-full max-w-sm rounded-xl border border-white/20 bg-white/30 px-4 py-3"
                   placeholder="Class code"
                   value={joinClassCode}
                   onChange={(event) => setJoinClassCode(event.target.value)}
@@ -1212,6 +1214,8 @@ export default function StudentDashboardPage() {
               </div>
             )}
           </GlassCard>
+        ) : activeStudentMenuItem === "settings" ? (
+          <SettingsPage role="student" />
         ) : (
           <GlassCard className="p-6">
             <h2 className="font-heading text-2xl font-semibold capitalize">{activeStudentMenuItem}</h2>

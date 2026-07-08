@@ -4,7 +4,7 @@ import { authStorage } from "@/lib/auth";
 
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "/api/v1";
-const REQUEST_TIMEOUT_MS = 15000;
+const REQUEST_TIMEOUT_MS = 60000;
 
 
 const withToggledLoopbackHost = (baseUrl: string): string | null => {
@@ -34,7 +34,7 @@ type RequestOptions = RequestInit & {
 
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const token = authStorage.getToken();
+  const token = await authStorage.getToken();
   const controller = new AbortController();
   const timeoutMs = typeof options.timeoutMs === "number" && options.timeoutMs > 0 ? options.timeoutMs : REQUEST_TIMEOUT_MS;
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -54,6 +54,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     });
 
     if (!response.ok) {
+      if (response.status === 401 && typeof window !== "undefined") {
+        window.location.href = "/login?expired=true";
+      }
       const text = await response.text();
       throw new Error(text || "Request failed");
     }
@@ -82,17 +85,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 }
 
 export const api = {
-  signup: (payload: { name: string; email: string; password: string; role: "teacher" | "student" }) =>
-    request<{ access_token: string; role: "teacher" | "student" }>("/auth/signup", {
+  /** Sync user profile with backend after Supabase signup */
+  syncUser: (payload: { name: string; role: "teacher" | "student" }) =>
+    request<{ success: boolean; data: { id: number; name: string; email: string; role: string } }>("/auth/sync", {
       method: "POST",
       body: JSON.stringify(payload)
     }),
-  login: (payload: { email: string; password: string }) =>
-    request<{ access_token: string; role: "teacher" | "student" }>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify(payload)
-    }),
-  me: () => request<{ id: number; name: string; email: string; role: "teacher" | "student" }>("/users/me"),
+  me: () => request<{ success: boolean; data: { id: number; name: string; email: string; role: "teacher" | "student" } }>("/auth/me"),
   ask: (payload: { course_id: number; question: string; session_id: string }) =>
     request<{ data: { answer: string } }>("/student/ask", {
       method: "POST",
@@ -313,9 +312,11 @@ export const api = {
         id: number;
         name: string;
         percentage: number;
+        manual_max_points: number | null;
         assignments: Array<{ id: string; title: string; max_marks: number; classwork_section_id: number | null }>;
       }>;
       grades: Array<{ student_id: number; assignment_id: string; marks: number }>;
+      manual_section_grades: Array<{ student_id: number; section_id: number; marks: number }>;
     }>(`/grades/leaderboard/${courseId}`),
   leaderboard: () => request<{ data: Array<{ name: string; rank_score: number; completion_percentage: number; quiz_score: number }> }>("/student/leaderboard"),
   progress: () => request<{ data: { completion_percentage: number; completed_tasks: number; pending_tasks: number } }>("/student/progress/summary"),

@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import func
@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.agents.tools import evaluate_quiz
 from app.common.config import settings
 from app.common.deps import require_role
+from app.common.storage import get_storage
 from app.database.models import (
     Announcement,
     AnnouncementAudience,
@@ -161,14 +162,13 @@ def create_course_announcement(
     if file is not None and file.filename:
         ext = Path(file.filename).suffix
         attachment_id = f"{uuid4()}{ext}"
-        destination_dir = Path(settings.material_storage_dir) / course.course_code / "announcements"
-        destination_dir.mkdir(parents=True, exist_ok=True)
-        destination = destination_dir / attachment_id
-        with destination.open("wb") as out:
-            out.write(file.file.read())
+        storage_path = f"courses/{course.course_code}/announcements/{attachment_id}"
+        
+        storage = get_storage()
+        storage.upload(storage_path, file.file.read(), file.content_type)
 
         attachment_name = file.filename
-        attachment_path = str(destination)
+        attachment_path = storage_path
         attachment_content_type = file.content_type or "application/octet-stream"
 
         indexed_material = Material(
@@ -183,7 +183,7 @@ def create_course_announcement(
         db.refresh(indexed_material)
 
         try:
-            ingest_material(indexed_material.id, course.id, str(destination))
+            ingest_material(indexed_material.id, course.id, storage_path)
         except Exception:
             logger.exception("Failed to embed student announcement attachment for course %s", course.course_code)
 
@@ -659,14 +659,17 @@ def get_course_announcement_attachment(
     if not announcement or not announcement.attachment_path:
         raise HTTPException(status_code=404, detail="Attachment not found")
 
-    attachment_path = Path(announcement.attachment_path)
-    if not attachment_path.exists():
-        raise HTTPException(status_code=404, detail="Attachment file missing")
+    storage = get_storage()
+    try:
+        content = storage.download(announcement.attachment_path)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Attachment file missing in storage")
 
-    return FileResponse(
-        path=str(attachment_path),
-        filename=announcement.attachment_name or attachment_path.name,
+    filename = announcement.attachment_name or Path(announcement.attachment_path).name
+    return Response(
+        content=content,
         media_type=announcement.attachment_content_type or "application/octet-stream",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
     )
 
 
@@ -943,10 +946,10 @@ def ask_question(
                 "- I need clearer context to give a precise answer.\n"
                 "- A more specific question will help me respond accurately."
             )
-    except ConnectionError as exc:
+    except Exception as exc:
         raise HTTPException(
             status_code=503,
-            detail="LLM backend is not reachable. Please ensure Ollama is running.",
+            detail=f"Gemini API error: {str(exc)}",
         ) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

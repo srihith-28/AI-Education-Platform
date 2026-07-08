@@ -1,40 +1,61 @@
+"""
+auth/service.py
+
+Authentication is now fully handled by Supabase Auth.
+This module provides helpers for user profile management in our local DB.
+"""
+import logging
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.auth.schemas import LoginRequest, SignupRequest
-from app.common.security import create_access_token, hash_password, verify_password
 from app.database.models import User
 
+logger = logging.getLogger("ai-education-api.auth")
 
 VALID_ROLES = {"teacher", "student"}
 
 
-def signup(payload: SignupRequest, db: Session) -> dict:
-    if payload.role not in VALID_ROLES:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Role must be teacher or student")
+def sync_user_profile(supabase_uid: str, email: str, name: str, role: str, db: Session) -> User:
+    """Create or update the local user profile after Supabase Auth signup.
 
-    existing = db.query(User).filter(User.email == payload.email).first()
-    if existing:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+    Called once by the frontend after successful Supabase signup so the role
+    is persisted in our PostgreSQL users table.
+    """
+    if role not in VALID_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Role must be one of: {', '.join(VALID_ROLES)}",
+        )
 
+    user = db.query(User).filter(User.supabase_uid == supabase_uid).first()
+    if user:
+        # Update mutable fields
+        user.name = name or user.name
+        user.role = role or user.role
+        db.commit()
+        db.refresh(user)
+        return user
+
+    # Check by email in case the record was pre-created
+    user = db.query(User).filter(User.email == email).first()
+    if user:
+        user.supabase_uid = supabase_uid
+        user.role = role
+        db.commit()
+        db.refresh(user)
+        return user
+
+    # Create new profile
     user = User(
-        name=payload.name,
-        email=payload.email,
-        password=hash_password(payload.password),
-        role=payload.role,
+        name=name,
+        email=email,
+        role=role,
+        supabase_uid=supabase_uid,
+        password="",
     )
     db.add(user)
     db.commit()
     db.refresh(user)
-
-    token = create_access_token(subject=str(user.id), role=user.role)
-    return {"access_token": token, "user_id": user.id, "role": user.role}
-
-
-def login(payload: LoginRequest, db: Session) -> dict:
-    user = db.query(User).filter(User.email == payload.email).first()
-    if not user or not verify_password(payload.password, user.password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
-
-    token = create_access_token(subject=str(user.id), role=user.role)
-    return {"access_token": token, "user_id": user.id, "role": user.role}
+    logger.info("Created new user profile: email=%s role=%s", email, role)
+    return user

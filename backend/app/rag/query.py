@@ -23,15 +23,32 @@ def _dedupe_docs(docs: list) -> list:
     return unique
 
 
+def _build_qdrant_filter(metadata_filter: dict):
+    """Convert a simple {key: value} dict into a Qdrant Filter object."""
+    from qdrant_client.http.models import FieldCondition, Filter, MatchValue
+    conditions = []
+    for key, value in metadata_filter.items():
+        conditions.append(
+            FieldCondition(key=f"metadata.{key}", match=MatchValue(value=value))
+        )
+    return Filter(must=conditions) if conditions else None
+
+
 def _retrieve_with_filter(store, question: str, k: int, metadata_filter: dict) -> list:
-    """Retrieve with metadata filter and tolerate int/string metadata drift."""
-    retriever = store.as_retriever(search_kwargs={"k": k, "filter": metadata_filter})
-    docs = retriever.get_relevant_documents(question)
+    """Retrieve with metadata filter using Qdrant filter format.
+
+    Falls back to string/int type conversion if initial retrieval returns nothing
+    (handles metadata stored with mixed types).
+    """
+    qdrant_filter = _build_qdrant_filter(metadata_filter)
+    retriever = store.as_retriever(search_kwargs={"k": k, "filter": qdrant_filter})
+    docs = retriever.invoke(question)
 
     if docs:
         return docs
 
-    alt_filter = {}
+    # Try converting int ↔ str for metadata values and retry once
+    alt_filter: dict = {}
     for key, value in metadata_filter.items():
         if isinstance(value, int):
             alt_filter[key] = str(value)
@@ -41,10 +58,12 @@ def _retrieve_with_filter(store, question: str, k: int, metadata_filter: dict) -
             alt_filter[key] = value
 
     if alt_filter != metadata_filter:
-        retriever = store.as_retriever(search_kwargs={"k": k, "filter": alt_filter})
-        docs = retriever.get_relevant_documents(question)
+        qdrant_filter = _build_qdrant_filter(alt_filter)
+        retriever = store.as_retriever(search_kwargs={"k": k, "filter": qdrant_filter})
+        docs = retriever.invoke(question)
 
     return docs
+
 
 
 def _truncate_at_sentence(text: str, max_chars: int) -> str:
@@ -142,7 +161,7 @@ def ask_with_rag(
     # Final fallback: query globally then keep course-matching chunks if available.
     if not docs:
         broad_retriever = store.as_retriever(search_kwargs={"k": max(8, top_k * 4)})
-        broad_docs = broad_retriever.get_relevant_documents(question)
+        broad_docs = broad_retriever.invoke(question)
         course_match = [
             doc for doc in broad_docs
             if str(doc.metadata.get("course_id", "")) == str(course_id)

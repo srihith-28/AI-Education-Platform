@@ -131,8 +131,8 @@ export function ClassworkPage({ embedded = false, courseId = null }: ClassworkPa
         return;
       }
       setAssignments(flattenBackendGroups(response.data));
-    } catch {
-      setFeedback("Could not connect to classwork API");
+    } catch (e: any) {
+      setFeedback(`Could not connect to classwork API: ${e.message || String(e)}`);
     } finally {
       setLoading(false);
     }

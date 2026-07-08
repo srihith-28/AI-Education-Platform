@@ -106,24 +106,38 @@ export function QuizBuilder({ questions, onChange }: QuizBuilderProps) {
 
               {question.type === "mcq" ? (
                 <div className="mt-3 space-y-2">
-                  {question.options.map((option, optionIndex) => (
-                    <div key={`${question.id}-${optionIndex}`} className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        checked={question.correctAnswer === option && option.trim().length > 0}
-                        onChange={() => updateQuestion(question.id, { correctAnswer: option })}
-                        disabled={!option.trim()}
-                        aria-label={`Select option ${optionIndex + 1} as correct answer`}
-                      />
-                      <input
-                        type="text"
-                        value={option}
-                        onChange={(event) => updateOption(question.id, optionIndex, event.target.value)}
-                        placeholder={`Option ${optionIndex + 1}`}
-                        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500"
-                      />
-                    </div>
-                  ))}
+                  {question.options.map((option, optionIndex) => {
+                    const isCorrect = question.correctAnswer === option && option.trim().length > 0;
+                    return (
+                      <div key={`${question.id}-${optionIndex}`} className="flex items-center gap-2">
+                        <label className="flex flex-shrink-0 cursor-pointer items-center gap-1.5 w-[100px]" title="Select as correct answer">
+                          <input
+                            type="radio"
+                            name={`correct-answer-${question.id}`}
+                            checked={isCorrect}
+                            onChange={() => updateQuestion(question.id, { correctAnswer: option })}
+                            disabled={!option.trim()}
+                            className="h-4 w-4 cursor-pointer text-green-600 focus:ring-green-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            aria-label={`Select option ${optionIndex + 1} as correct answer`}
+                          />
+                          <span className={`text-xs font-bold uppercase tracking-wider ${isCorrect ? "text-green-600" : "text-slate-400"}`}>
+                            {isCorrect ? "Correct" : "Mark"}
+                          </span>
+                        </label>
+                        <input
+                          type="text"
+                          value={option}
+                          onChange={(event) => updateOption(question.id, optionIndex, event.target.value)}
+                          placeholder={`Option ${optionIndex + 1}`}
+                          className={`w-full rounded-md border px-3 py-2 text-sm outline-none transition-colors ${
+                            isCorrect
+                              ? "border-green-500 bg-green-50/30 text-green-900 focus:border-green-600 focus:ring-1 focus:ring-green-500"
+                              : "border-slate-300 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                          }`}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="mt-3">

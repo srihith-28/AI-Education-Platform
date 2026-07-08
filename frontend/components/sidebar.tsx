@@ -17,6 +17,7 @@ type SidebarProps = {
   activeStudentCourseId?: number | null;
   onStudentCourseSelect?: (courseId: number) => void;
   onStudentLogout?: () => void;
+  onTeacherLogout?: () => void;
 };
 
 const teacherMenuItems = [
@@ -53,13 +54,39 @@ export function Sidebar({
   studentEnrolledCourses = [],
   activeStudentCourseId,
   onStudentCourseSelect,
-  onStudentLogout
+  onStudentLogout,
+  onTeacherLogout
 }: SidebarProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [internalActiveItemId, setInternalActiveItemId] = useState("home");
   const [isTeachingExpanded, setIsTeachingExpanded] = useState(false);
   const [isEnrolledExpanded, setIsEnrolledExpanded] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const sidebarRef = useRef<HTMLElement | null>(null);
+
+  const handleLogoutConfirm = () => {
+    setIsLogoutModalOpen(false);
+    if (role === "student" && onStudentLogout) {
+      onStudentLogout();
+    } else if (role === "teacher" && onTeacherLogout) {
+      onTeacherLogout();
+    }
+  };
+
+  const renderLogoutModal = () => {
+    if (!isLogoutModalOpen) return null;
+    return (
+      <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/45 px-4" onClick={() => setIsLogoutModalOpen(false)}>
+        <div className="w-full max-w-sm rounded-2xl border border-white/20 bg-slate-100 p-6 text-slate-900 shadow-2xl dark:bg-slate-900 dark:text-slate-100" onClick={(event) => event.stopPropagation()}>
+          <h3 className="text-xl font-semibold mb-6">Are you sure you want to log out?</h3>
+          <div className="flex justify-end gap-3">
+            <button className="rounded-xl px-5 py-2 font-medium text-slate-700 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => setIsLogoutModalOpen(false)}>No</button>
+            <button className="rounded-xl bg-sky-600 px-5 py-2 font-medium text-white hover:bg-sky-700" onClick={handleLogoutConfirm}>Yes</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   useEffect(() => {
     if (!isExpanded) {
@@ -81,6 +108,7 @@ export function Sidebar({
     const selectedItemId = activeStudentItem ?? internalActiveItemId;
 
     return (
+      <>
       <aside
         ref={sidebarRef}
         className={`glass sticky top-4 flex h-[calc(100vh-2rem)] flex-col rounded-3xl py-4 text-slate-800 shadow-glass transition-all duration-300 dark:text-slate-100 ${
@@ -237,7 +265,7 @@ export function Sidebar({
           <button
             type="button"
             title={isExpanded ? undefined : "Logout"}
-            onClick={onStudentLogout}
+            onClick={() => setIsLogoutModalOpen(true)}
             className={`flex w-full items-center transition ${
               isExpanded
                 ? "justify-start rounded-full px-4 py-3 text-left border-2 border-transparent hover:bg-white/70 dark:hover:bg-slate-700/55"
@@ -255,12 +283,15 @@ export function Sidebar({
           </button>
         </div>
       </aside>
+      {renderLogoutModal()}
+      </>
     );
   }
 
   return (
+    <>
     <aside
-      className={`glass min-h-full rounded-3xl py-4 text-slate-800 shadow-glass transition-all duration-300 dark:text-slate-100 ${
+      className={`glass sticky top-4 flex h-[calc(100vh-2rem)] flex-col rounded-3xl py-4 text-slate-800 shadow-glass transition-all duration-300 dark:text-slate-100 ${
         isExpanded ? "w-[272px] px-4" : "w-[84px] px-2.5"
       }`}
     >
@@ -409,6 +440,30 @@ export function Sidebar({
           );
         })}
       </nav>
+
+      <div className="mt-auto pt-4">
+        <button
+          type="button"
+          title={isExpanded ? undefined : "Logout"}
+          onClick={() => setIsLogoutModalOpen(true)}
+          className={`flex w-full items-center transition ${
+            isExpanded
+              ? "justify-start rounded-full px-4 py-3 text-left border-2 border-transparent hover:bg-white/70 dark:hover:bg-slate-700/55"
+              : "justify-center rounded-full p-2.5 hover:bg-white/70 dark:hover:bg-slate-700/55"
+          }`}
+        >
+          {isExpanded ? (
+            <span className="flex items-center gap-3">
+              <LogOut className="h-5 w-5 shrink-0" />
+              <span className="text-[1.02rem] font-medium leading-none tracking-tight">Logout</span>
+            </span>
+          ) : (
+            <LogOut className="h-5 w-5 shrink-0" />
+          )}
+        </button>
+      </div>
     </aside>
+    {renderLogoutModal()}
+    </>
   );
 }

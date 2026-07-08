@@ -1,64 +1,87 @@
 "use client";
 
-
-type AuthPayload = {
-  token: string;
-  role: "teacher" | "student";
-};
+/**
+ * lib/auth.ts
+ *
+ * Supabase-based auth helpers. Replaces the previous localStorage/cookie-based
+ * custom JWT implementation. All auth state is managed by Supabase session.
+ *
+ * Usage:
+ *   import { authStorage } from "@/lib/auth";
+ *   const token = await authStorage.getToken();
+ *   const userId = await authStorage.getUserId();
+ */
+import { supabase } from "@/lib/supabase";
 
 export const authStorage = {
-  setAuth({ token, role }: AuthPayload) {
-    localStorage.setItem("token", token);
-    localStorage.setItem("role", role);
-    document.cookie = `token=${token}; path=/; max-age=86400`;
-    document.cookie = `role=${role}; path=/; max-age=86400`;
+  /**
+   * Get the current Supabase access token (Bearer token for API calls).
+   * Returns empty string if not authenticated.
+   */
+  async getToken(): Promise<string> {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? "";
   },
-  clearAuth() {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
-    document.cookie = "token=; path=/; max-age=0";
-    document.cookie = "role=; path=/; max-age=0";
+
+  /**
+   * Get the current Supabase user UUID.
+   * Returns null if not authenticated.
+   */
+  async getUserId(): Promise<string | null> {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.user.id ?? null;
   },
-  getToken() {
-    if (typeof window === "undefined") {
-      return "";
-    }
 
-    const localToken = localStorage.getItem("token") ?? "";
-    if (localToken) {
-      return localToken;
-    }
-
-    const cookieToken = document.cookie
-      .split("; ")
-      .find((entry) => entry.startsWith("token="))
-      ?.slice("token=".length)
-      ?? "";
-
-    if (cookieToken) {
-      localStorage.setItem("token", cookieToken);
-    }
-
-    return cookieToken;
+  /**
+   * Get the user's role from Supabase app_metadata.
+   * Returns null if not authenticated or role not set.
+   */
+  async getRole(): Promise<"teacher" | "student" | null> {
+    const { data } = await supabase.auth.getSession();
+    const role = data.session?.user?.app_metadata?.role as string | undefined;
+    if (role === "teacher" || role === "student") return role;
+    return null;
   },
-  getUserId() {
-    const token = this.getToken();
-    if (!token) {
-      return null;
-    }
 
-    try {
-      const payload = token.split(".")[1];
-      if (!payload) {
-        return null;
-      }
-      const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-      const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-      const decoded = JSON.parse(atob(padded));
-      const subject = Number(decoded?.sub);
-      return Number.isFinite(subject) ? subject : null;
-    } catch {
-      return null;
-    }
-  }
+  /**
+   * Get the user's email.
+   */
+  async getEmail(): Promise<string | null> {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.user?.email ?? null;
+  },
+
+  /**
+   * Sign out from Supabase and clear all local session state.
+   */
+  async signOut(): Promise<void> {
+    await supabase.auth.signOut();
+  },
+
+  /**
+   * Check if there is an active session.
+   */
+  async isAuthenticated(): Promise<boolean> {
+    const { data } = await supabase.auth.getSession();
+    return !!data.session;
+  },
 };
+
+/**
+ * Get a synchronous token from localStorage as a fallback for non-async contexts.
+ * Prefer authStorage.getToken() in components.
+ */
+export function getTokenSync(): string {
+  if (typeof window === "undefined") return "";
+  // Supabase stores the session in localStorage automatically
+  try {
+    const raw = localStorage.getItem(
+      `sb-${process.env.NEXT_PUBLIC_SUPABASE_URL?.replace("https://", "").split(".")[0]}-auth-token`
+    );
+    if (!raw) return "";
+    const parsed = JSON.parse(raw);
+    return parsed?.access_token ?? "";
+  } catch {
+    return "";
+  }
+}

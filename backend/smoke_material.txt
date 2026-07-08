@@ -1,1 +1,0 @@
-Neural networks learn patterns from data. Backpropagation updates weights.

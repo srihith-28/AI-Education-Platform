@@ -3,7 +3,7 @@ import re
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from langchain_ollama import OllamaLLM
+from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
@@ -69,10 +69,14 @@ def _student_can_view_course(course_id: int, user_id: int, db: Session) -> bool:
     return bool(enrollment)
 
 
-def _llm() -> OllamaLLM:
+def _llm() -> ChatGoogleGenerativeAI:
     # Use quality model for grading consistency.
-    model = settings.ollama_quality_chat_model or settings.ollama_chat_model
-    return OllamaLLM(model=model, base_url=settings.ollama_base_url, temperature=0.1)
+    return ChatGoogleGenerativeAI(
+        model=settings.gemini_quality_model,
+        google_api_key=settings.gemini_api_key,
+        temperature=0.1,
+        max_tokens=2048,
+    )
 
 
 def _parse_json_grade(raw: str, max_marks: float) -> tuple[float, str]:
@@ -202,7 +206,7 @@ def _normalize_answer_text(value: str) -> str:
     return " ".join((value or "").strip().lower().split())
 
 
-def _grade_question_with_llm(question: dict, student_answer: str, marks_per_question: float, llm: OllamaLLM) -> tuple[float, str]:
+def _grade_question_with_llm(question: dict, student_answer: str, marks_per_question: float, llm: ChatGoogleGenerativeAI) -> tuple[float, str]:
     prompt = (
         "You are grading one quiz question."
         " Decide whether the student's answer should earn full marks for this question or zero marks."
@@ -215,7 +219,8 @@ def _grade_question_with_llm(question: dict, student_answer: str, marks_per_ques
         f"Max Marks For This Question: {marks_per_question}\n"
     )
 
-    raw = llm.invoke(prompt)
+    result = llm.invoke(prompt)
+    raw = result.content if hasattr(result, "content") else str(result)
     marks, feedback = _parse_json_grade(raw, marks_per_question)
     return round(marks, 2), feedback
 
@@ -819,22 +824,17 @@ def auto_grade_assignment(
             continue
 
         grading_context = _build_grading_context(assignment, raw_submission_content)
-
-        prompt = (
-            "You are a strict teacher.\n\n"
-            "Evaluate the student's turned-in data. Use all available data, including any structured quiz payload, attachments, and comments.\n"
-            "For quiz items, compare student answers against expected answers when provided.\n\n"
-            f"Max Marks: {float(assignment.points)}\n\n"
-            f"Evaluation Context:\n{grading_context}\n\n"
-            "Return ONLY in JSON:\n"
-            "{\n"
-            '  "marks": number,\n'
-            '  "feedback": "short explanation"\n'
-            "}"
-        )
+        context_text = _build_grading_context(assignment, raw_submission_content)
 
         try:
-            raw = llm.invoke(prompt)
+            prompt = (
+                "You are an AI grader. Grade this student submission based on the provided context.\n"
+                "Return ONLY valid JSON in this exact format: {\"marks\": number, \"feedback\": \"short explanation\" }.\n\n"
+                f"Context:\n{context_text}\n\n"
+                f"Max marks: {assignment.points}\n"
+            )
+            result = llm.invoke(prompt)
+            raw = result.content if hasattr(result, "content") else str(result)
             ai_marks, ai_feedback = _parse_json_grade(raw, float(assignment.points))
         except Exception:
             error_count += 1

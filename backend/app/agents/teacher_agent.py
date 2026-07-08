@@ -1,16 +1,9 @@
-from urllib.error import URLError
-from urllib.request import urlopen
-import json
 import re
 import time
 
 from app.agents.orchestration import invoke_with_fallback, select_orchestration_profile
 from app.agents.prompting import PROMPT_FOR_AI_AGENTS
 from app.agents.tools import generate_quiz, suggest_improvements, summarize_text
-from app.common.config import settings
-
-
-_OLLAMA_READY_UNTIL = 0.0
 
 
 RESPONSE_STYLE_RULES = (
@@ -144,46 +137,7 @@ def _grounded_title_answer_from_context(query: str, rag_context: str) -> str | N
     )
 
 
-def _ensure_ollama_ready() -> None:
-    global _OLLAMA_READY_UNTIL
-    if time.time() < _OLLAMA_READY_UNTIL:
-        return
-
-    tags_url = f"{settings.ollama_base_url.rstrip('/')}/api/tags"
-    try:
-        with urlopen(tags_url, timeout=3) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except (URLError, TimeoutError, OSError) as exc:
-        raise RuntimeError(
-            f"Ollama is unreachable at {settings.ollama_base_url}. Start Ollama and try again."
-        ) from exc
-    except json.JSONDecodeError as exc:
-        raise RuntimeError("Ollama returned an invalid response for /api/tags.") from exc
-
-    names = {model.get("name", "") for model in payload.get("models", [])}
-    short_names = {name.split(":")[0] for name in names}
-    has_any_chat_model = (
-        settings.ollama_chat_model in names
-        or settings.ollama_chat_model in short_names
-        or settings.ollama_fast_chat_model in names
-        or settings.ollama_fast_chat_model in short_names
-        or settings.ollama_ultra_fast_chat_model in names
-        or settings.ollama_ultra_fast_chat_model in short_names
-        or settings.ollama_quality_chat_model in names
-        or settings.ollama_quality_chat_model in short_names
-    )
-    if not has_any_chat_model:
-        raise RuntimeError(
-            "No configured chat model found in Ollama. "
-            f"Run: ollama pull {settings.ollama_ultra_fast_chat_model}"
-        )
-
-    # Cache readiness check to avoid extra network overhead on every request.
-    _OLLAMA_READY_UNTIL = time.time() + 120
-
-
 def teacher_agent_response(query: str, material_text: str) -> dict:
-    _ensure_ollama_ready()
     query_lc = query.lower()
     text = material_text[:7000]
 
@@ -212,7 +166,6 @@ def teacher_agent_response(query: str, material_text: str) -> dict:
 
 
 def teacher_chatbot_response(query: str, memory_text: str = "", rag_context: str = "", chat_mode: str = "quality") -> str:
-    _ensure_ollama_ready()
 
     # For greetings/acknowledgements, avoid expensive generation and avoid dragging old context.
     if _is_small_talk(query):

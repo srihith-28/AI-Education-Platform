@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { api } from "@/lib/api";
+import { computeRelativeGrade, getGradeBadgeColor } from "@/lib/grades";
 
 type Student = {
   id: number;
@@ -21,12 +22,19 @@ type GradeSection = {
   id: number;
   name: string;
   percentage: number;
+  manual_max_points: number | null;
   assignments: Assignment[];
 };
 
 type GradeRow = {
   student_id: number;
   assignment_id: string;
+  marks: number;
+};
+
+type ManualSectionGradeRow = {
+  student_id: number;
+  section_id: number;
   marks: number;
 };
 
@@ -45,10 +53,21 @@ const buildGradeMap = (rows: GradeRow[]): Record<number, Record<string, number>>
   }, {});
 };
 
+const buildManualSectionGradeMap = (rows: ManualSectionGradeRow[]): Record<number, Record<number, number>> => {
+  return rows.reduce<Record<number, Record<number, number>>>((acc, row) => {
+    if (!acc[row.student_id]) {
+      acc[row.student_id] = {};
+    }
+    acc[row.student_id][row.section_id] = row.marks;
+    return acc;
+  }, {});
+};
+
 export function StudentLeaderboardPage({ courseId, courseTitle }: StudentLeaderboardPageProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [sections, setSections] = useState<GradeSection[]>([]);
   const [gradeMap, setGradeMap] = useState<Record<number, Record<string, number>>>({});
+  const [manualSectionGradeMap, setManualSectionGradeMap] = useState<Record<number, Record<number, number>>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -58,6 +77,15 @@ export function StudentLeaderboardPage({ courseId, courseTitle }: StudentLeaderb
   }, [sections]);
 
   const computeSectionPercent = (studentId: number, section: GradeSection): number => {
+    if (section.assignments.length === 0) {
+      const maxMarks = section.manual_max_points ?? 0;
+      if (maxMarks <= 0) {
+        return 0;
+      }
+      const marks = manualSectionGradeMap[studentId]?.[section.id] ?? 0;
+      return (marks / maxMarks) * 100;
+    }
+
     const maxMarks = section.assignments.reduce((sum, assignment) => sum + assignment.max_marks, 0);
     if (maxMarks <= 0) {
       return 0;
@@ -80,7 +108,14 @@ export function StudentLeaderboardPage({ courseId, courseTitle }: StudentLeaderb
 
   const sortedStudents = useMemo(() => {
     return [...students].sort((a, b) => computeTotalPercent(b.id) - computeTotalPercent(a.id));
-  }, [students, sections, gradeMap]);
+  }, [students, sections, gradeMap, manualSectionGradeMap]);
+
+  const { classMean, classStdDev } = useMemo(() => {
+    const studentTotals = students.map((s) => computeTotalPercent(s.id));
+    const mean = studentTotals.length > 0 ? studentTotals.reduce((sum, val) => sum + val, 0) / studentTotals.length : 0;
+    const variance = studentTotals.length > 0 ? studentTotals.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / studentTotals.length : 0;
+    return { classMean: mean, classStdDev: Math.sqrt(variance) };
+  }, [students, sections, gradeMap, manualSectionGradeMap]);
 
   const loadLeaderboard = async () => {
     try {
@@ -90,10 +125,12 @@ export function StudentLeaderboardPage({ courseId, courseTitle }: StudentLeaderb
       setStudents(response.students || []);
       setSections(response.sections || []);
       setGradeMap(buildGradeMap(response.grades || []));
+      setManualSectionGradeMap(buildManualSectionGradeMap(response.manual_section_grades || []));
     } catch (err) {
       setStudents([]);
       setSections([]);
       setGradeMap({});
+      setManualSectionGradeMap({});
       setError(err instanceof Error ? err.message : "Could not load leaderboard");
     } finally {
       setLoading(false);
@@ -145,6 +182,7 @@ export function StudentLeaderboardPage({ courseId, courseTitle }: StudentLeaderb
                 </th>
               ))}
               <th className="border border-white/20 bg-white/20 p-2 text-center font-semibold">Total</th>
+              <th className="border border-white/20 bg-white/20 p-2 text-center font-semibold">Grade</th>
             </tr>
           </thead>
           <tbody>
@@ -162,11 +200,22 @@ export function StudentLeaderboardPage({ courseId, courseTitle }: StudentLeaderb
                 <td className="border border-white/15 bg-white/10 p-2 text-center font-semibold">
                   {computeTotalPercent(student.id).toFixed(1)}%
                 </td>
+                <td className="border border-white/15 bg-white/10 p-2 text-center font-bold">
+                  {(() => {
+                    const total = computeTotalPercent(student.id);
+                    const grade = computeRelativeGrade(total, classMean, classStdDev);
+                    return (
+                      <span className={`inline-block rounded-md px-2 py-1 text-xs ${getGradeBadgeColor(grade)}`}>
+                        {grade}
+                      </span>
+                    );
+                  })()}
+                </td>
               </tr>
             ))}
             {sortedStudents.length === 0 && !loading ? (
               <tr>
-                <td colSpan={sections.length + 2} className="border border-white/15 p-6 text-center text-sm opacity-70">
+                <td colSpan={sections.length + 3} className="border border-white/15 p-6 text-center text-sm opacity-70">
                   No leaderboard data yet.
                 </td>
               </tr>

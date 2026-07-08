@@ -34,9 +34,9 @@ import { Sidebar } from "@/components/sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ChatSessionMenu } from "@/components/chat-session-menu";
 import { authStorage } from "@/lib/auth";
+import { SettingsPage } from "@/components/settings/SettingsPage";
 
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "/api/v1";
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "/api/v1").replace("localhost", "127.0.0.1");
 
 
 type Course = {
@@ -278,7 +278,7 @@ export default function TeacherDashboardPage() {
     try {
       setAudienceLoading(true);
       const response = await fetch(`${API_BASE}/teacher/courses/${courseCode}/students`, {
-        headers: getAuthHeaders(true),
+        headers: await getAuthHeaders(true),
       });
       const data = await response.json();
       if (!response.ok || !Array.isArray(data?.data)) {
@@ -301,7 +301,7 @@ export default function TeacherDashboardPage() {
     try {
       const response = await fetch(`${API_BASE}/teacher/courses/${activeTeachingCourse.course_code}/reset-class-code`, {
         method: "POST",
-        headers: getAuthHeaders(true),
+        headers: await getAuthHeaders(true),
         body: JSON.stringify({})
       });
       const data = await response.json();
@@ -354,7 +354,7 @@ export default function TeacherDashboardPage() {
   const refreshTeacherSessions = async () => {
     try {
       const response = await fetch(`${API_BASE}/agents/teacher-assistant/sessions`, {
-        headers: getAuthHeaders(true)
+        headers: await getAuthHeaders(true)
       });
       const data = await response.json();
       if (response.ok && Array.isArray(data?.data)) {
@@ -371,7 +371,7 @@ export default function TeacherDashboardPage() {
     try {
       setAgentSessionLoading(true);
       const response = await fetch(`${API_BASE}/agents/teacher-assistant/sessions/${sessionId}`, {
-        headers: getAuthHeaders(true)
+        headers: await getAuthHeaders(true)
       });
       const data = await response.json();
       if (!response.ok) {
@@ -400,7 +400,7 @@ export default function TeacherDashboardPage() {
     try {
       const response = await fetch(`${API_BASE}/agents/teacher-assistant/sessions/${sessionId}`, {
         method: "DELETE",
-        headers: getAuthHeaders(true)
+        headers: await getAuthHeaders(true)
       });
       const data = await response.json();
       if (!response.ok) {
@@ -426,7 +426,7 @@ export default function TeacherDashboardPage() {
     try {
       const response = await fetch(`${API_BASE}/agents/teacher-assistant/sessions/${sessionId}/rename`, {
         method: "POST",
-        headers: getAuthHeaders(true),
+        headers: await getAuthHeaders(true),
         body: JSON.stringify({ custom_title: newTitle })
       });
       if (!response.ok) {
@@ -443,7 +443,7 @@ export default function TeacherDashboardPage() {
     try {
       const response = await fetch(`${API_BASE}/agents/teacher-assistant/sessions/${sessionId}/pin`, {
         method: "POST",
-        headers: getAuthHeaders(true),
+        headers: await getAuthHeaders(true),
         body: JSON.stringify({})
       });
       if (!response.ok) {
@@ -460,7 +460,7 @@ export default function TeacherDashboardPage() {
     try {
       const response = await fetch(`${API_BASE}/agents/teacher-assistant/sessions/${sessionId}/archive`, {
         method: "POST",
-        headers: getAuthHeaders(true),
+        headers: await getAuthHeaders(true),
         body: JSON.stringify({})
       });
       if (!response.ok) {
@@ -482,8 +482,8 @@ export default function TeacherDashboardPage() {
     }
   };
 
-  const getAuthHeaders = (json = true): HeadersInit => {
-    const token = authStorage.getToken();
+  const getAuthHeaders = async (json = true): Promise<HeadersInit> => {
+    const token = await authStorage.getToken();
     return {
       ...(json ? { "Content-Type": "application/json" } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -493,7 +493,7 @@ export default function TeacherDashboardPage() {
   const loadCourses = async () => {
     try {
       const response = await fetch(`${API_BASE}/teacher/courses`, {
-        headers: getAuthHeaders(true)
+        headers: await getAuthHeaders(true)
       });
       const data = await response.json();
       if (response.ok && Array.isArray(data?.data)) {
@@ -522,7 +522,7 @@ export default function TeacherDashboardPage() {
     try {
       const response = await fetch(`${API_BASE}/teacher/courses/${activeTeachingCourse.course_code}/rename`, {
         method: "POST",
-        headers: getAuthHeaders(true),
+        headers: await getAuthHeaders(true),
         body: JSON.stringify({ title, course_code: nextCode }),
       });
       const data = await response.json();
@@ -544,7 +544,7 @@ export default function TeacherDashboardPage() {
     try {
       const response = await fetch(`${API_BASE}/teacher/courses/${course.course_code}/archive`, {
         method: "POST",
-        headers: getAuthHeaders(true),
+        headers: await getAuthHeaders(true),
         body: JSON.stringify({}),
       });
       const data = await response.json();
@@ -570,7 +570,7 @@ export default function TeacherDashboardPage() {
     try {
       const response = await fetch(`${API_BASE}/teacher/courses/${course.course_code}/restore`, {
         method: "POST",
-        headers: getAuthHeaders(true),
+        headers: await getAuthHeaders(true),
         body: JSON.stringify({}),
       });
       const data = await response.json();
@@ -838,7 +838,7 @@ export default function TeacherDashboardPage() {
     try {
       const response = await fetch(`${API_BASE}/teacher/courses`, {
         method: "POST",
-        headers: getAuthHeaders(true),
+        headers: await getAuthHeaders(true),
         body: JSON.stringify({
           title: courseTitle,
           course_code: courseCode,
@@ -875,7 +875,7 @@ export default function TeacherDashboardPage() {
       setStreamLoading(true);
       setStreamMessage("");
       const response = await fetch(`${API_BASE}/teacher/courses/${courseCode}/announcements`, {
-        headers: getAuthHeaders(true),
+        headers: await getAuthHeaders(true),
       });
       const data = await response.json();
       if (!response.ok || !Array.isArray(data?.data)) {
@@ -917,7 +917,7 @@ export default function TeacherDashboardPage() {
       setPostingAnnouncement(true);
       const response = await fetch(`${API_BASE}/teacher/courses/${selectedAnnouncementCourse.course_code}/announcements`, {
         method: "POST",
-        headers: getAuthHeaders(false),
+        headers: await getAuthHeaders(false),
         body: formData,
       });
       const data = await response.json();
@@ -950,7 +950,7 @@ export default function TeacherDashboardPage() {
       setPostingCommentFor(postId);
       const response = await fetch(`${API_BASE}/teacher/courses/${activeTeachingCourse.course_code}/announcements/${postId}/comments`, {
         method: "POST",
-        headers: getAuthHeaders(true),
+        headers: await getAuthHeaders(true),
         body: JSON.stringify({ content }),
       });
       const data = await response.json();
@@ -983,7 +983,7 @@ export default function TeacherDashboardPage() {
         : new URL(downloadUrl, window.location.origin).toString();
 
       const response = await fetch(resolvedDownloadUrl, {
-        headers: getAuthHeaders(false),
+        headers: await getAuthHeaders(false),
       });
       if (!response.ok) {
         setStreamMessage("Could not open attachment.");
@@ -1024,7 +1024,7 @@ export default function TeacherDashboardPage() {
 
       const response = await fetch(`${API_BASE}/agents/teacher-assistant-chat`, {
         method: "POST",
-        headers: getAuthHeaders(true),
+        headers: await getAuthHeaders(true),
         body: JSON.stringify({ query: currentQuestion, session_id: activeSessionId, course_code: selectedCourseCode || undefined, chat_mode: "quality" })
       });
       // Some backend failures can return plain text/HTML in debug mode.
@@ -1063,7 +1063,7 @@ export default function TeacherDashboardPage() {
     try {
       const response = await fetch(`${API_BASE}/teacher/courses/${courseCodeToDelete}`, {
         method: "DELETE",
-        headers: getAuthHeaders(true)
+        headers: await getAuthHeaders(true)
       });
       const data = await response.json();
 
@@ -1099,6 +1099,11 @@ export default function TeacherDashboardPage() {
           setActiveTeachingCourseId(courseId);
           setActiveTeacherMenuItem("teaching");
           setActiveClassroomTab("stream");
+        }}
+        onTeacherLogout={() => {
+          authStorage.signOut().then(() => {
+            window.location.href = "/login";
+          });
         }}
       />
       <section className="space-y-4">
@@ -1821,6 +1826,8 @@ export default function TeacherDashboardPage() {
               </div>
             )}
           </GlassCard>
+        ) : activeTeacherMenuItem === "settings" ? (
+          <SettingsPage role="teacher" />
         ) : activeTeacherMenuItem !== "home" ? (
           <GlassCard className="p-6">
             <h2 className="font-heading text-2xl font-semibold">{activeTeacherMenuItem.charAt(0).toUpperCase() + activeTeacherMenuItem.slice(1)}</h2>
@@ -1851,7 +1858,7 @@ export default function TeacherDashboardPage() {
 
         <GlassCard className="p-5">
           <h2 className="font-heading text-xl">Teacher AI Chatbot</h2>
-          <p className="mt-1 text-sm opacity-75">Direct LLM chat powered by Ollama (llama3.1:latest).</p>
+          <p className="mt-1 text-sm opacity-75">Direct LLM chat powered by Groq.</p>
           <div className="mt-4 grid gap-3 lg:grid-cols-[260px_1fr]">
             <div className="rounded-xl border border-white/20 bg-white/10 p-3">
               <div className="mb-2 flex items-center justify-between">

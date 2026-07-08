@@ -2,17 +2,17 @@ import json
 import logging
 import random
 import string
-import shutil
+import os
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Response
+from fastapi.responses import RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.agents.tools import generate_quiz
-from app.common.config import settings
+from app.common.storage import get_storage
 from app.common.deps import require_role
 from app.database.models import (
     Announcement,
@@ -173,8 +173,8 @@ def create_course(
         raise HTTPException(status_code=409, detail="Course code already exists")
 
     course = Course(
-        title=payload.title,
-        course_code=payload.course_code.upper(),
+        title=payload.title.strip(),
+        course_code=payload.course_code.strip().upper(),
         class_code=_generate_unique_class_code(db),
         section=payload.section,
         description=payload.description,
@@ -785,32 +785,38 @@ def create_announcement(
     if file is not None and file.filename:
         ext = Path(file.filename).suffix
         attachment_id = f"{uuid4()}{ext}"
-        destination_dir = Path(settings.material_storage_dir) / course.course_code / "announcements"
-        destination_dir.mkdir(parents=True, exist_ok=True)
-        destination = destination_dir / attachment_id
-        with destination.open("wb") as out:
-            out.write(file.file.read())
+        object_path = f"courses/{course.course_code}/announcements/{attachment_id}"
+        file_bytes = file.file.read()
+        content_type = file.content_type or "application/octet-stream"
+
+        storage = get_storage()
+        storage.upload(object_path, file_bytes, content_type)
 
         attachment_name = file.filename
-        attachment_path = str(destination)
-        attachment_content_type = file.content_type or "application/octet-stream"
+        attachment_path = object_path  # Supabase Storage object path
+        attachment_content_type = content_type
 
         # Keep teacher RAG fresh: index attached announcement files as course materials.
-        indexed_material = Material(
-            course_id=course.id,
-            teacher_id=current_user.id,
-            file_name=file.filename,
-            file_path=str(destination),
-            content_type=file.content_type or "application/octet-stream",
-        )
-        db.add(indexed_material)
-        db.commit()
-        db.refresh(indexed_material)
-
+        # Download to temp file for text extraction
+        tmp_path: str | None = None
         try:
-            ingest_material(indexed_material.id, course.id, str(destination))
+            tmp_path = storage.download_to_temp(object_path)
+            indexed_material = Material(
+                course_id=course.id,
+                teacher_id=current_user.id,
+                file_name=file.filename,
+                file_path=object_path,
+                content_type=content_type,
+            )
+            db.add(indexed_material)
+            db.commit()
+            db.refresh(indexed_material)
+            ingest_material(indexed_material.id, course.id, tmp_path)
         except Exception:
             logger.exception("Failed to embed announcement attachment for course %s", course.course_code)
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
 
     announcement = Announcement(
         course_id=course.id,
@@ -929,14 +935,16 @@ def get_announcement_attachment(
         if audience_rows and current_user.id not in {row.student_id for row in audience_rows}:
             raise HTTPException(status_code=403, detail="You do not have access to this attachment")
 
-    attachment_file = Path(announcement.attachment_path)
-    if not attachment_file.exists():
-        raise HTTPException(status_code=404, detail="Attachment file not found")
+    storage = get_storage()
+    try:
+        content = storage.download(announcement.attachment_path)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Attachment file not found in storage")
 
-    return FileResponse(
-        path=str(attachment_file),
-        filename=announcement.attachment_name,
+    return Response(
+        content=content,
         media_type=announcement.attachment_content_type or "application/octet-stream",
+        headers={"Content-Disposition": f'inline; filename="{announcement.attachment_name}"'},
     )
 
 
@@ -1004,16 +1012,11 @@ def delete_course(
         connection.execute(text("DELETE FROM courses WHERE id = :course_id"), {"course_id": course_id})
 
     for file_path_value in material_paths:
-        file_path = Path(file_path_value)
-        if file_path.exists():
-            try:
-                file_path.unlink()
-            except OSError:
-                pass
+        pass # file_path is a Supabase Storage object path, not local
 
-    course_folder = Path(settings.material_storage_dir) / normalized_code
-    if course_folder.exists():
-        shutil.rmtree(course_folder, ignore_errors=True)
+    # Delete all files stored under this course in Supabase Storage
+    storage = get_storage()
+    storage.delete_folder(f"courses/{normalized_code}")
 
     delete_course_vectors(course_id)
 
@@ -1042,29 +1045,40 @@ def upload_material(
 
     ext = Path(file.filename).suffix
     file_id = f"{uuid4()}{ext}"
-    destination = Path(settings.material_storage_dir) / course.course_code
-    destination.mkdir(parents=True, exist_ok=True)
-    destination = destination / file_id
+    object_path = f"courses/{course.course_code}/{file_id}"
+    file_bytes = file.file.read()
+    content_type = file.content_type or "application/octet-stream"
 
-    with destination.open("wb") as out:
-        out.write(file.file.read())
+    # Upload to Supabase Storage
+    storage = get_storage()
+    storage.upload(object_path, file_bytes, content_type)
 
     material = Material(
         course_id=course.id,
         teacher_id=current_user.id,
         file_name=file.filename,
-        file_path=str(destination),
-        content_type=file.content_type or "application/octet-stream",
+        file_path=object_path,  # Supabase Storage object path
+        content_type=content_type,
     )
     db.add(material)
     db.commit()
     db.refresh(material)
 
-    # Keep retrieval cumulative: add the new file without removing older course vectors.
-    chunk_count = ingest_material(material.id, course.id, str(destination))
+    # Download to temp for text extraction, then ingest into Qdrant
+    tmp_path: str | None = None
+    chunk_count = 0
+    try:
+        tmp_path = storage.download_to_temp(object_path)
+        chunk_count = ingest_material(material.id, course.id, tmp_path)
+    except Exception:
+        logger.exception("Failed to ingest material %d for course %s", material.id, course.course_code)
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
     return UploadMaterialResponse(
         success=True,
-        message=f"File had successfully uploaded in the {course.course_code}",
+        message=f"File successfully uploaded to {course.course_code}",
         data={
             "file_id": material.id,
             "chunk_count": chunk_count,
@@ -1084,7 +1098,18 @@ def generate_quiz_from_material(
     if not material:
         return {"success": False, "message": "Material not found"}
 
-    text = extract_text(material.file_path)
+    storage = get_storage()
+    tmp_path: str | None = None
+    try:
+        tmp_path = storage.download_to_temp(material.file_path)
+        text = extract_text(tmp_path)
+    except Exception as exc:
+        logger.exception("Failed to download material %d for quiz generation", material.id)
+        return {"success": False, "message": f"Could not read material: {exc}"}
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
     quiz_json = generate_quiz(text, payload.question_count)
 
     quiz = Quiz(

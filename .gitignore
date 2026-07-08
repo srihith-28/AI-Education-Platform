@@ -26,3 +26,5 @@ frontend/.data/
 .vscode/
 
 .DS_Store
+backend/.env.local
+backend/app/local.db

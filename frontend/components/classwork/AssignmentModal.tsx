@@ -227,6 +227,12 @@ export function AssignmentModal({
               </div>
             </div>
 
+            {error ? (
+              <div className="border-b border-red-200 bg-red-50 px-6 py-3 text-sm font-medium text-red-600 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-400">
+                {error}
+              </div>
+            ) : null}
+
             <div className="max-h-[calc(100vh-10rem)] overflow-y-auto p-6">
               <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
               <section className="space-y-4">
@@ -314,12 +320,10 @@ export function AssignmentModal({
                     <QuizBuilder questions={quizQuestions} onChange={setQuizQuestions} />
                   </div>
                 ) : null}
-
-                {error ? <p className="text-sm text-red-500">{error}</p> : null}
               </section>
 
               <aside className="space-y-3">
-                <div className="space-y-1 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800/70">
+                <div className={`space-y-1 rounded-lg border bg-white p-3 dark:bg-slate-800/70 ${error && type !== "material" && sectionId == null ? "border-red-400 shadow-[0_0_0_1px_rgba(248,113,113,1)]" : "border-slate-200 dark:border-slate-700"}`}>
                   <label className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Classwork Section</label>
                   <select
                     value={sectionId || ""}
@@ -364,7 +368,7 @@ export function AssignmentModal({
                 </div>
 
                 {selectedAction === "schedule" ? (
-                  <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800/70">
+                  <div className={`space-y-2 rounded-lg border bg-white p-3 dark:bg-slate-800/70 ${error && selectedAction === "schedule" && !combineDateTime(scheduleDate, scheduleTime) ? "border-red-400 shadow-[0_0_0_1px_rgba(248,113,113,1)]" : "border-slate-200 dark:border-slate-700"}`}>
                     <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
                       <CalendarClock className="h-4 w-4" />
                       Schedule for

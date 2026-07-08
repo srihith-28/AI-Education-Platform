@@ -169,6 +169,11 @@ export function GradesTable({
     return sortByTotalDesc ? rightTotal - leftTotal : leftTotal - rightTotal;
   });
 
+  const studentTotals = students.map((s) => computeStudentTotal(s.id));
+  const classMean = studentTotals.length > 0 ? studentTotals.reduce((sum, val) => sum + val, 0) / studentTotals.length : 0;
+  const classVariance = studentTotals.length > 0 ? studentTotals.reduce((sum, val) => sum + Math.pow(val - classMean, 2), 0) / studentTotals.length : 0;
+  const classStdDev = Math.sqrt(classVariance);
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -210,6 +215,9 @@ export function GradesTable({
               })}
               <th rowSpan={2} className="border border-slate-200 bg-slate-50 p-2 text-center font-semibold dark:border-slate-800 dark:bg-slate-900">
                 Total
+              </th>
+              <th rowSpan={2} className="border border-slate-200 bg-slate-50 p-2 text-center font-semibold dark:border-slate-800 dark:bg-slate-900">
+                Grade
               </th>
             </tr>
             <tr>
@@ -296,6 +304,8 @@ export function GradesTable({
                 onSaveCell={onSaveCell}
                 onSaveSectionGrade={onSaveSectionGrade}
                 onOpenDetails={onOpenDetails}
+                classMean={classMean}
+                classStdDev={classStdDev}
               />
             ))}
           </tbody>

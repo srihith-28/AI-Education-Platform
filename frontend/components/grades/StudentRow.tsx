@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 import { GradeCell } from "@/components/grades/GradeCell";
+import { computeRelativeGrade, getGradeBadgeColor } from "@/lib/grades";
 
 
 type Student = {
@@ -53,6 +54,8 @@ type StudentRowProps = {
   onSaveCell: (studentId: number, assignmentId: string, marks: number, maxMarks: number) => Promise<void>;
   onSaveSectionGrade: (studentId: number, sectionId: number, marks: number) => Promise<void>;
   onOpenDetails: (student: Student, assignment: Assignment) => void;
+  classMean?: number;
+  classStdDev?: number;
 };
 
 export function StudentRow({
@@ -69,6 +72,8 @@ export function StudentRow({
   onSaveCell,
   onSaveSectionGrade,
   onOpenDetails,
+  classMean = 0,
+  classStdDev = 0,
 }: StudentRowProps) {
   const [sectionDrafts, setSectionDrafts] = useState<Record<number, string>>({});
   const totalSectionWeight = sections.reduce((sum, section) => sum + section.percentage, 0) || 100;
@@ -124,6 +129,8 @@ export function StudentRow({
   };
 
   const overallWeightedTotal = sections.reduce((sum, section) => sum + computeSectionStats(section).weightedContribution, 0);
+
+  const letterGrade = computeRelativeGrade(overallWeightedTotal, classMean, classStdDev);
 
   return (
     <tr className="border-b border-slate-200 dark:border-slate-800">
@@ -205,6 +212,11 @@ export function StudentRow({
 
       <td className="border border-slate-200 bg-slate-50 p-2 text-center font-semibold dark:border-slate-800 dark:bg-slate-900">
         {overallWeightedTotal.toFixed(1)}%
+      </td>
+      <td className="border border-slate-200 bg-slate-50 p-2 text-center font-bold dark:border-slate-800 dark:bg-slate-900">
+        <span className={`inline-block rounded-md px-2 py-1 text-xs ${getGradeBadgeColor(letterGrade)}`}>
+          {letterGrade}
+        </span>
       </td>
     </tr>
   );

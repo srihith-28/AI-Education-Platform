@@ -61,24 +61,62 @@ def list_calendar_events(
         .all()
     )
 
+    from app.database.models import Classwork, Submission
+
+    classwork_map = {}
+    submission_map = {}
+    if current_user.role == "student" and rows:
+        classworks = db.query(Classwork).filter(
+            Classwork.course_id.in_(allowed_ids),
+            Classwork.due_date >= start_date,
+            Classwork.due_date <= end_date
+        ).all()
+        for cw in classworks:
+            classwork_map[(cw.course_id, cw.title, cw.due_date)] = cw
+        
+        if classworks:
+            cw_ids = [cw.id for cw in classworks]
+            submissions = db.query(Submission).filter(
+                Submission.student_id == current_user.id,
+                Submission.classwork_id.in_(cw_ids)
+            ).all()
+            for sub in submissions:
+                submission_map[sub.classwork_id] = sub
+
+    data = []
+    for event, course_code, course_title in rows:
+        event_dict = {
+            "id": event.id,
+            "title": event.title,
+            "description": event.description,
+            "course_id": event.course_id,
+            "course_code": course_code,
+            "course_title": course_title,
+            "type": event.type,
+            "due_date": event.due_date.isoformat(),
+            "due_time": event.due_time.isoformat() if event.due_time else None,
+            "created_at": event.created_at.isoformat(),
+        }
+
+        if current_user.role == "student":
+            cw = classwork_map.get((event.course_id, event.title, event.due_date))
+            if cw:
+                sub = submission_map.get(cw.id)
+                if sub:
+                    event_dict["status"] = "late" if sub.status == "late" else "turned_in"
+                elif event.due_date < date.today():
+                    event_dict["status"] = "missing"
+                else:
+                    event_dict["status"] = "assigned"
+            else:
+                event_dict["status"] = None
+        
+        data.append(event_dict)
+
     return {
         "success": True,
         "message": "Calendar events fetched",
-        "data": [
-            {
-                "id": event.id,
-                "title": event.title,
-                "description": event.description,
-                "course_id": event.course_id,
-                "course_code": course_code,
-                "course_title": course_title,
-                "type": event.type,
-                "due_date": event.due_date.isoformat(),
-                "due_time": event.due_time.isoformat() if event.due_time else None,
-                "created_at": event.created_at.isoformat(),
-            }
-            for event, course_code, course_title in rows
-        ],
+        "data": data,
     }
 
 

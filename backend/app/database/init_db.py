@@ -8,6 +8,19 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
 
     with engine.begin() as connection:
+        # ── Supabase Auth migration: add supabase_uid to users ────────────────
+        connection.execute(
+            text(
+                """
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS supabase_uid VARCHAR(36) UNIQUE;
+                """
+            )
+        )
+        connection.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_users_supabase_uid ON users (supabase_uid)")
+        )
+
         column_check = connection.execute(
             text(
                 """
