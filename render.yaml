@@ -1,12 +1,12 @@
 services:
-  # Backend FastAPI Service
   - type: web
     name: ai-education-backend
     env: python
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: cd backend && pip install -r requirements.txt
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
       - key: SUPABASE_JWT_SECRET
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
@@ -26,9 +26,8 @@ services:
   - type: web
     name: ai-education-frontend
     env: node
-    rootDir: frontend
-    buildCommand: npm install && npm run build
-    startCommand: npm start
+    buildCommand: cd frontend && npm install && npm run build
+    startCommand: cd frontend && npm start
     envVars:
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false
